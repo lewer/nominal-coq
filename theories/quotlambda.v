@@ -55,8 +55,6 @@ Definition var_inv (s : seq (nat * nat)) := [seq (x.2, x.1) | x <- s].
 Lemma var_invK s : var_inv (var_inv s) = s.
 Proof. by elim: s => [|[? ?] ? ihs] //=; rewrite ihs. Qed.
 
-Require Import perm.
-
 Require Import bigenough.
 Import BigEnough.
 
@@ -348,7 +346,7 @@ Canonical pi_act
   (pp : PreNat.perm) (p : {pi pp}) (n : nat) : equal_to (pp n) :=
   @EqualTo _ _ (act _ _) (fun_of_natperm_subproof p n).
 
-Lemma natpermP (p q : natperm) : act p =1 act q :> nat -> nat <-> p = q.
+Lemma natpermP (p q : natperm) : act p =1 act q :> (nat -> nat) <-> p = q.
 Proof.
 split; last by move->.
 elim/quotW: p => p; elim/quotW: q => q pq.
