@@ -3,4 +3,4 @@
 *.glob
 *.cm*
 *.aux
-Makefile
+Makefile.*
