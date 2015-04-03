@@ -57,20 +57,20 @@ Proof. by elim: s => [|[? ?] ? ihs] //=; rewrite ihs. Qed.
 
 Require Import perm.
 
-(* Require Import bigenough. *)
-(* Import BigEnough. *)
+Require Import bigenough.
+Import BigEnough.
 
-(* Definition big_rel_subseq_class : big_rel_class_of (@subseq [eqType of nat]). *)
-(* Proof. *)
-(* exists subseq (fun ss => flatten ss) => //; first exact: subseq_trans. *)
-(*   by move=> /= i s; rewrite prefix_subseq. *)
-(* by move=> /= i j s /subseq_trans -> //; rewrite suffix_subseq. *)
-(* Qed. *)
-(* Canonical big_enough_support := BigRelOf big_rel_subseq_class. *)
+Definition big_rel_subseq_class : big_rel_class_of (@subseq [eqType of nat]).
+Proof.
+exists subseq (fun ss => flatten ss) => //; first exact: subseq_trans.
+  by move=> /= i s; rewrite prefix_subseq.
+by move=> /= i j s /subseq_trans -> //; rewrite suffix_subseq.
+Qed.
+Canonical big_enough_support := BigRelOf big_rel_subseq_class.
 
-(* Ltac pose_big_enough i := pose_big_enough_gen big_enough_support i. *)
-(* Ltac pose_big_modulus F m := pose_big_modulus_gen big_enough_support F m. *)
-(* Ltac exists_big_modulus F m := pose_big_modulus m F; first exists m. *)
+Ltac pose_big_enough i := pose_big_enough_gen big_enough_support i.
+Ltac pose_big_modulus F m := pose_big_modulus_gen big_enough_support F m.
+Ltac exists_big_modulus F m := pose_big_modulus m F; first exists m.
 
 Module PreNat.
 
@@ -360,12 +360,11 @@ Definition nsupport T := Nominal.nsupport (Nominal.class T).
 Lemma natperm_for_subproof (p : natperm) :
   {s' : _ & forall s, subseq s' s -> {p' : {perm seq_sub s} | p = NatPerm p'}}.
 Proof.
-(* elim/quotW: p => p; pose_big_enough s'. *)
-(*   exists s' => s Hs; exists (PreNat.perm_for s p). *)
-(*   by apply/natpermP => n; rewrite !piE /= -PreNat.permE_for. *)
-(* by close. *)
-(* Qed. *)
-Admitted.
+elim/quotW: p => p; pose_big_enough s'.
+  exists s' => s Hs; exists (PreNat.perm_for s p).
+  by apply/natpermP => n; rewrite !piE /= -PreNat.permE_for.
+by close.
+Qed.
 
 Definition support_perm_for p := projT1 (natperm_for_subproof p).
 
@@ -406,11 +405,10 @@ Proof. by move=> p /=; apply/natpermP => n; rewrite !piE. Qed.
 Lemma perm_forM_subproof p q : {bigs | forall s, subseq bigs s -> 
   perm_for s (p * q)%p = (perm_for s p * perm_for s q)%g}.
 Proof.
-(* pose_big_enough bigs. *)
-(*   by exists bigs => s Hs; apply: NatPerm_inj; rewrite NatPermM !perm_forK. *)
-(* by close. *)
-(* Qed. *)
-Admitted.
+pose_big_enough bigs.
+  by exists bigs => s Hs; apply: NatPerm_inj; rewrite NatPermM !perm_forK.
+by close.
+Qed.
 
 Definition support_perm_forM p q := projT1 (perm_forM_subproof p q).
 Lemma perm_forM p q s : subseq (support_perm_forM p q) s ->
@@ -420,11 +418,10 @@ Proof. by rewrite /support_perm_forM; case: perm_forM_subproof=> ?; apply. Qed.
 Lemma perm_forV_subproof p : {bigs | forall s, subseq bigs s -> 
   perm_for s (p^-1)%p = (perm_for s p)^-1%g}.
 Proof.
-(* pose_big_enough bigs. *)
-(*   by exists bigs => s Hs; apply: NatPerm_inj; rewrite NatPermV !perm_forK. *)
-(* by close. *)
-(* Qed. *)
-Admitted.
+pose_big_enough bigs.
+  by exists bigs => s Hs; apply: NatPerm_inj; rewrite NatPermV !perm_forK.
+by close.
+Qed.
 
 Definition support_perm_forV p := projT1 (perm_forV_subproof p).
 Lemma perm_forV p s : subseq (support_perm_forV p) s ->
@@ -449,19 +446,17 @@ Qed.
 
 Lemma mulpV p : (p * p^-1)%p = 1%p.
 Proof.
-(* pose_big_enough s. *)
-(*   by rewrite -[p](@perm_forK s) // -NatPermV -NatPermM mulgV NatPerm1. *)
-(* by close. *)
-(* Qed. *)
-Admitted.
+pose_big_enough s.
+  by rewrite -[p](@perm_forK s) // -NatPermV -NatPermM mulgV NatPerm1.
+by close.
+Qed.
 
 Lemma mulVp p : (p^-1 * p)%p = 1%p.
 Proof.
-(* pose_big_enough s. *)
-(*   by rewrite -[p](@perm_forK s) // -NatPermV -NatPermM mulVg NatPerm1. *)
-(* by close. *)
-(* Qed. *)
-Admitted.
+pose_big_enough s.
+  by rewrite -[p](@perm_forK s) // -NatPermV -NatPermM mulVg NatPerm1.
+by close.
+Qed.
 
 Lemma mulpA : associative natperm_mul.
 Proof. by move=> p q r; apply/natpermP => n; rewrite !actM. Qed.
@@ -533,20 +528,19 @@ Theorem some_any T (R : nat -> T -> Prop) :
       -> (forall n, n \notin nsupport x -> R n x)
     ].
 Proof.
-(* move=> Requi x; split; first by move=> Rnx; exists (nsupport x). *)
-(*   case=> s Rnx; pose_big_enough_gen leq n. *)
-(*     apply/(Requi (tnatperm (nfresh x) n)). *)
-(*     rewrite tnatpermL act_id; first by apply: Rnx; rewrite big_fresh. *)
-(*     move=> m mx; rewrite tnatpermD //; apply: contraTN mx => /eqP<- //. *)
-(*     by rewrite big_fresh. *)
-(*   by close. *)
-(*   by exists (nfresh x). *)
-(* move=> [n nx] Rnx m mx; apply/(Requi (tnatperm n m)). *)
-(* rewrite tnatpermR act_id // => a ax; rewrite tnatpermD //. *)
-(*   by apply: contra nx => /eqP->. *)
-(* by apply: contra mx => /eqP->. *)
-(* Qed. *)
-Admitted.
+move=> Requi x; split; first by move=> Rnx; exists (nsupport x).
+  case=> s Rnx; pose_big_enough_gen leq n.
+    apply/(Requi (tnatperm (nfresh x) n)).
+    rewrite tnatpermL act_id; first by apply: Rnx; rewrite big_fresh.
+    move=> m mx; rewrite tnatpermD //; apply: contraTN mx => /eqP<- //.
+    by rewrite big_fresh.
+  by close.
+  by exists (nfresh x).
+move=> [n nx] Rnx m mx; apply/(Requi (tnatperm n m)).
+rewrite tnatpermR act_id // => a ax; rewrite tnatpermD //.
+  by apply: contra nx => /eqP->.
+by apply: contra mx => /eqP->.
+Qed.
 
 Lemma new_forall T (R : nat -> T -> Prop) :
   (forall (p : natperm) n x, R (act p n) (act p x) <-> R n x) ->
@@ -760,15 +754,14 @@ Proof. by move=> Hs; rewrite val_perm_for. Qed.
 Lemma tnatperm_act p x y :
   (tnatperm (act p x) (act p y)) = (p^-1 * (tnatperm x y) * p)%p.
 Proof.
-(* pose_big_enough s. *)
-(*   rewrite -[p in RHS](@perm_forK s) //=. *)
-(*   rewrite (@tnatpermE s x y) ?big_support //= => xs ys. *)
-(*   rewrite -NatPermV -!NatPermM -mulgA -conjgE tpermJ. *)
-(*   rewrite (@tnatpermE s) ?big_support // => pxs pys. *)
-(*   by congr (NatPerm (tperm _ _)); apply: val_inj; rewrite val_perm_for. *)
-(* by close.   *)
-(* Qed. *)
-Admitted.
+pose_big_enough s.
+  rewrite -[p in RHS](@perm_forK s) //=.
+  rewrite (@tnatpermE s x y) ?big_support //= => xs ys.
+  rewrite -NatPermV -!NatPermM -mulgA -conjgE tpermJ.
+  rewrite (@tnatpermE s) ?big_support // => pxs pys.
+  by congr (NatPerm (tperm _ _)); apply: val_inj; rewrite val_perm_for.
+by close.
+Qed.
 
 Lemma equi_alpha_spec p u v : alpha_spec (act p u) (act p v) <-> alpha_spec u v.
 Proof.
@@ -789,14 +782,14 @@ Qed.
 
 Lemma equi_alpha p : {mono act p : u v / alpha u v}.
 Proof.
-(* move=> u v /=; rewrite /alpha pre_depth_perm. *)
-(* move: {-1}(pre_depth u) (leqnn (pre_depth u)) => n. *)
-(* elim: n u v => [|n ihn] [x|u v|x u] [y|u' v'|y u'] //=; *)
-(*   do ?by rewrite (inj_eq (can_inj (@actK nat_nominalType p))) //. *)
-(*   by rewrite ltnS geq_max => /andP [un vn]; rewrite !ihn. *)
-(* rewrite ltnS => un. *)
-(* pose P z x := alpha_rec n *)
-(*      (act (tnatperm x.1.1 z) x.2.1) (act (tnatperm x.1.2 z) x.2.2). *)
+move=> u v /=; rewrite /alpha pre_depth_perm.
+move: {-1}(pre_depth u) (leqnn (pre_depth u)) => n.
+elim: n u v => [|n ihn] [x|u v|x u] [y|u' v'|y u'] //=;
+  do ?by rewrite (inj_eq (can_inj (@actK nat_nominalType p))) //.
+  by rewrite ltnS geq_max => /andP [un vn]; rewrite !ihn.
+rewrite ltnS => un.
+pose P z x := alpha_rec n
+     (act (tnatperm x.1.1 z) x.2.1) (act (tnatperm x.1.2 z) x.2.2).
 (* set z := nfresh _f. *)
 (* transitivity (P z (act p x, act p y, (act p u, act p u'))). *)
 (*   done. *)
@@ -811,7 +804,7 @@ Proof.
 (*   split; last exact: hw. *)
 (*   by move=> /(hw p^-1%p); rewrite !actK. *)
 (* move=> /alpha_ind E; elim/E : {u v E} _ => *)
-(*   [x|u v u' v' uu' auu' vv' avv'|x y u u' Hu Hpu].  *)
+(*   [x|u v u' v' uu' auu' vv' avv'|x y u u' Hu Hpu]. *)
 (*   by constructor. *)
 (*  rewrite /act /= -![termact _]/(@act _ term_nominalType). *)
 (*  by constructor. *)
@@ -820,48 +813,46 @@ Proof.
 (* constructor; exists (act p s) => n Hn. *)
 (* rewrite -[n](actVK p) !tnatperm_act -!actM !mulpA !mulpV !mul1p !actM. *)
 (* by apply: Hs; rewrite -(mem_map (can_inj (@actK nat_nominalType p))) actVK. *)
-(* Qed. *)
 Admitted.
 
 Lemma alphaP t t' : reflect (alpha_spec t t') (alpha t t').
 Proof.
-(* pose P z x := alpha_spec *)
-(*      (act (tnatperm x.1.1 z) x.2.1) (act (tnatperm x.1.2 z) x.2.2). *)
-(* have equiP p z x : P (act p z) (act p x) <-> P z x. *)
-(*   case: x => [[m n] [u v]]; rewrite /P /=. *)
-(*   by rewrite !tnatperm_act -!actM !mulpA !mulpV !mul1p !actM equi_alpha_spec. *)
-(* apply: (iffP idP). *)
-(*   rewrite /alpha. *)
-(*   move: {-1}(pre_depth t) (leqnn (pre_depth t)) => n. *)
-(*   elim: n t t' => [|n ihn] [x|u v|x u] [y|u' v'|y u'] //=. *)
-(*     by move=> _ /eqP->; constructor. *)
-(*     by move=> _ /eqP->; constructor. *)
-(*     rewrite ?ltnS geq_max => /andP [nu vn]  /andP [Hu Hv]. *)
-(*     by constructor; apply: ihn. *)
-(*   rewrite ltnS => un Hu; constructor. *)
-(*   suff: \new z, P z ((x, y), (u, u')) by []. *)
-(*   by apply/new_fresh => //; apply: ihn => //=; rewrite pre_depth_perm. *)
-(* move => /alpha_ind E; elim/E: {t t' E}_ => //=. *)
-(*   by move=> x; rewrite /alpha  /=. *)
-(*   move=> u v u' v' asuu' auu' asvv' avv'. *)
-(*   by rewrite /alpha /= !alpha_recE ?(leq_maxl, leq_maxr) // ?auu' ?avv'. *)
-(* move=> x y u v asuv auv; rewrite /alpha /= !alpha_recE ?pre_depth_perm //. *)
-(* suff: \new z, P z ((x, y), (u, v)). *)
-(*   move/(new_fresh equiP); rewrite /P /=. *)
-(*    have := (new_fresh _ x). *)
-    
+pose P z x := alpha_spec
+     (act (tnatperm x.1.1 z) x.2.1) (act (tnatperm x.1.2 z) x.2.2).
+have equiP p z x : P (act p z) (act p x) <-> P z x.
+  case: x => [[m n] [u v]]; rewrite /P /=.
+  by rewrite !tnatperm_act -!actM !mulpA !mulpV !mul1p !actM equi_alpha_spec.
+apply: (iffP idP).
+  rewrite /alpha.
+  move: {-1}(pre_depth t) (leqnn (pre_depth t)) => n.
+  elim: n t t' => [|n ihn] [x|u v|x u] [y|u' v'|y u'] //=.
+    by move=> _ /eqP->; constructor.
+    by move=> _ /eqP->; constructor.
+    rewrite ?ltnS geq_max => /andP [nu vn]  /andP [Hu Hv].
+    by constructor; apply: ihn.
+  rewrite ltnS => un Hu; constructor.
+  suff: \new z, P z ((x, y), (u, u')) by [].
+  by apply/new_fresh => //; apply: ihn => //=; rewrite pre_depth_perm.
+move => /alpha_ind E; elim/E: {t t' E}_ => //=.
+  by move=> x; rewrite /alpha  /=.
+  move=> u v u' v' asuu' auu' asvv' avv'.
+  by rewrite /alpha /= !alpha_recE ?(leq_maxl, leq_maxr) // ?auu' ?avv'.
+move=> x y u v asuv auv; rewrite /alpha /= !alpha_recE ?pre_depth_perm //.
+suff: \new z, P z ((x, y), (u, v)).
+  move/(new_fresh equiP); rewrite /P /=.
+   have := (new_fresh _ x).
 
-(*   exists (nsupport (u, u')) => m Hm. *)
-(*   apply: ihn. *)
+  (* exists (nsupport (u, u')) => m Hm. *)
+  (* apply: ihn. *)
 
  
-(*   rewrite alpha_recE ?pre_depth_perm // => Hu; constructor. *)
-(*   exists (nsupport (u, u')) => n hn. *)
-(*   apply: ihu. *)
-(*   pose P z x := alpha_spec (tnatperm x.1.1 z _ x.2.1) (tnatperm x.1.2 z _ x.2.2). *)
-(*   suff: \new z, P z ((x, y), (u, u')) by []. *)
-(*   apply/new_exists; last first. *)
-(*     exist  *)
+  (* rewrite alpha_recE ?pre_depth_perm // => Hu; constructor. *)
+  (* exists (nsupport (u, u')) => n hn. *)
+  (* apply: ihu. *)
+  (* pose P z x := alpha_spec (tnatperm x.1.1 z _ x.2.1) (tnatperm x.1.2 z _ x.2.2). *)
+  (* suff: \new z, P z ((x, y), (u, u')) by []. *)
+  (* apply/new_exists; last first. *)
+  (*   exist *)
    
   
       
@@ -922,12 +913,12 @@ Local Open Scope quotient_scope.
 (* Lemma fun_var_bij s : bijective (fun_var s). *)
 (* Proof. exists (fun_var (var_inv s)); [exact: fun_varK|exact: fun_varVK]. Qed. *)
 
-Lemma fun_var_nil : fun_var [::] =1 some.
-Proof. done. Qed.
+(* Lemma fun_var_nil : fun_var [::] =1 some. *)
+(* Proof. done. Qed. *)
 
-Lemma if_eq (X : eqType) Y (T : X -> Y) a b :
-  (if a == b then T a else T b) = T b.
-Proof. by case: ifP => // /eqP ->. Qed.
+(* Lemma if_eq (X : eqType) Y (T : X -> Y) a b : *)
+(*   (if a == b then T a else T b) = T b. *)
+(* Proof. by case: ifP => // /eqP ->. Qed. *)
 
 (* Lemma fun_var_cons_comp x y f a : *)
 (*   fun_var ((x, y) :: f) a = fun_var [::(fun_var f x, y)] (fun_var f a).   *)
@@ -948,33 +939,33 @@ Proof. by case: ifP => // /eqP ->. Qed.
 (*   (fun_var ((x, y) :: s) z == y) = (z == x). *)
 (* Proof. by rewrite (can2_eq (fun_varK _) (fun_varVK _)) fun_var_eq. Qed. *)
 
-Definition eq_var_fun_var s (x y : nat) : eq_var s x y = (fun_var s x == Some y).
-Proof.
-elim: s => [|[a b] s ihs] //= in x y *.
-have [|nxa] := altP (x =P a); have [->|nyb] //= := altP (y =P b).
-  by rewrite eqxx.
-  by rewrite (inj_eq Some_inj) eq_sym (negPf nyb).
-  by case: ifP.
-rewrite ihs; case: ifP => // /eqP->.
-by rewrite (inj_eq Some_inj) eq_sym (negPf nyb).
-Qed.
+(* Definition eq_var_fun_var s (x y : nat) : eq_var s x y = (fun_var s x == Some y). *)
+(* Proof. *)
+(* elim: s => [|[a b] s ihs] //= in x y *. *)
+(* have [|nxa] := altP (x =P a); have [->|nyb] //= := altP (y =P b). *)
+(*   by rewrite eqxx. *)
+(*   by rewrite (inj_eq Some_inj) eq_sym (negPf nyb). *)
+(*   by case: ifP. *)
+(* rewrite ihs; case: ifP => // /eqP->. *)
+(* by rewrite (inj_eq Some_inj) eq_sym (negPf nyb). *)
+(* Qed. *)
 
-Lemma fun_varP s (x y : nat) : eq_var s x y -> fun_var s x = Some y.
-Proof. by rewrite eq_var_fun_var => /eqP. Qed.
+(* Lemma fun_varP s (x y : nat) : eq_var s x y -> fun_var s x = Some y. *)
+(* Proof. by rewrite eq_var_fun_var => /eqP. Qed. *)
 
-Lemma eq_var_eqr s x y y' : eq_var s x y -> eq_var s x y' = (y == y').
-Proof.
-by move=> exy; rewrite eq_var_fun_var (fun_varP exy) (inj_eq Some_inj).
-Qed.
+(* Lemma eq_var_eqr s x y y' : eq_var s x y -> eq_var s x y' = (y == y'). *)
+(* Proof. *)
+(* by move=> exy; rewrite eq_var_fun_var (fun_varP exy) (inj_eq Some_inj). *)
+(* Qed. *)
 
-Lemma eq_var_eql s y x x' : eq_var s x y -> eq_var s x' y = (x == x').
-Proof. 
-elim: s => [|[a b] s ihs] //= in x y x' *; first by move/eqP->.
-have [->|nxa] := altP (x =P a); have [->|nyb] //= := altP (y =P b).
-  by rewrite eq_sym; case: (a == x').
-move/ihs->; have [<-|nxx'] := altP (x =P x'); last by rewrite !(orbF, andbF).
-by rewrite (negPf nxa).
-Qed.
+(* Lemma eq_var_eql s y x x' : eq_var s x y -> eq_var s x' y = (x == x'). *)
+(* Proof.  *)
+(* elim: s => [|[a b] s ihs] //= in x y x' *; first by move/eqP->. *)
+(* have [->|nxa] := altP (x =P a); have [->|nyb] //= := altP (y =P b). *)
+(*   by rewrite eq_sym; case: (a == x'). *)
+(* move/ihs->; have [<-|nxx'] := altP (x =P x'); last by rewrite !(orbF, andbF). *)
+(* by rewrite (negPf nxa). *)
+(* Qed. *)
 
 (* Lemma eq_var_fun s x x' : eq_var s x (fun_var s x') -> x = x'. *)
 (* Proof. *)
