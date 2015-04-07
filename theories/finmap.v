@@ -127,7 +127,7 @@ End ClassDef.
     Notation keyType := type.
     Notation keyMixin := mixin_of.
     Notation KeyMixin := Mixin.
-    Notation KeyType T m := (@pack T m _ _ id).
+    Notation KeyType T m := (@pack T _ m _ _ id _ id).
 
     Notation "[ 'keyType' 'of' T 'for' cT ]" := (@clone T cT _ id)
       (at level 0, format "[ 'keyType' 'of' T 'for' cT ]") : form_scope.
@@ -136,6 +136,46 @@ End ClassDef.
   End Exports.
 End Key.
 Import Key.Exports.
+
+Section ChoiceKeyMixin.
+Variable (T : choiceType).
+
+Definition choice_sort_keys (s : seq T) : seq T :=
+   choose [pred t : seq T | perm_eq (undup s) t] (undup s).
+
+Fact choice_sort_keys_uniq s : uniq (choice_sort_keys s).
+Proof.
+rewrite /choice_sort_keys; set P := (X in choose X).
+have : P (choose P (undup s)) by exact/chooseP/perm_eq_refl.
+by move=> /perm_eq_uniq <-; rewrite undup_uniq.
+Qed.
+
+Fact mem_choice_sort_keys (s : seq T) : choice_sort_keys s =i s.
+Proof.
+rewrite /choice_sort_keys; set P := (X in choose X) => x.
+have : P (choose P (undup s)) by exact/chooseP/perm_eq_refl.
+by move=> /perm_eq_mem <-; rewrite mem_undup.
+Qed.
+
+Lemma eq_choice_sort_keys (s s' : seq T) :
+  s =i s' -> choice_sort_keys s = choice_sort_keys s'.
+Proof.
+move=> eq_ss'; rewrite /choice_sort_keys.
+have peq_ss' : perm_eq (undup s) (undup s').
+  by apply: uniq_perm_eq; rewrite ?undup_uniq // => x; rewrite !mem_undup.
+rewrite (@choose_id _ _ _ (undup s')) //=; apply: eq_choose => x /=.
+by apply: sym_left_transitive; [exact: perm_eq_sym|exact: perm_eq_trans|].
+Qed.
+
+Definition ChoiceKeyMixinOf of (phant T) :=
+  KeyMixin choice_sort_keys_uniq mem_choice_sort_keys eq_choice_sort_keys.
+
+End ChoiceKeyMixin.
+
+Notation ChoiceKeyMixin T := (@ChoiceKeyMixinOf _ (Phant T)).
+
+Definition nat_KeyMixin := ChoiceKeyMixin nat.
+Canonical nat_KeyType := KeyType nat nat_KeyMixin.
 
 Section KeyTheory.
 Variable (K : keyType).
@@ -1241,14 +1281,18 @@ rewrite ffunE /= Some_oextract; apply: Some_inj; rewrite -in_fnd.
 by rewrite Some_ojoin // ojoinT // -mem_reducef.
 Qed.
 
+End Ops2.
+
+(*
+
 Lemma fnd_filterd V (f : {fmap K -> V}) P k :
   (filterf f P).[? k] = if P k then f.[?k] else None.
 Proof.
 rewrite fnd_reducef.
-Admitted.
+
 (* PROOF IN PROGRESS *)
-End Ops2.
-(*
+
+
 Lemma get_rem V (v0 : V) (f : {fmap K -> V}) (k k' : K) :
   (f.[~ k]).[k' | v0] = if k' == k then v0 else f.[k' | v0].
  Proof.
