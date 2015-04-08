@@ -1283,6 +1283,22 @@ Qed.
 
 End Ops2.
 
+Section FinSFun.
+
+Variables (K:keyType) (V:eqType).
+
+Record finsfun (default : K -> V) := FinSFun {
+  finsfun_of : {fmap K -> V};
+  can : forall (k : K) (kf : k \in finsfun_of), finsfun_of.[kf] != default k
+}.
+
+Definition fun_of_finsfun default (f : finsfun default) (k : K) :=
+  odflt (default k) (finsfun_of f).[? k].
+
+Coercion fun_of_finsfun : finsfun >-> Funclass.
+
+End FinSFun.
+
 (*
 
 Lemma fnd_filterd V (f : {fmap K -> V}) P k :
@@ -1750,3 +1766,4 @@ Qed.
 End KeysInd.
 
 *)
+
