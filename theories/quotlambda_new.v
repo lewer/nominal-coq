@@ -9,22 +9,31 @@ Unset Printing Implicit Defensive.
 
 Definition atom := nat.
 
+Section FinPerm.
+
 Record finPerm := FinPerm {
   perm_of : finsfun (@id atom);
   stable (a:atom) (kf: a \in domf (finsfun_of perm_of)): (finsfun_of perm_of).[kf]%fmap \in domf (finsfun_of perm_of);
-  inj : injectiveb (finsfun_of perm_of)
+   inj : injectiveb (finsfun_of perm_of)
 }.
 
 Definition fun_of_perm π := fun_of_finsfun (perm_of π).
-
 Coercion fun_of_perm : finPerm >-> Funclass.
 
 Definition support (π : finPerm) :=
   domf (finsfun_of (perm_of π)).
 
-(* Est-ce qu'on peut afficher par défaut a: atom plutot que
- a : Key.sort nat_KeyType ? *)
+Lemma perm_of_finPerm_subproof (π : finPerm) : 
+  injectiveb [ffun x:support π => SeqSub (stable (ssvalP x))].
+Proof.
+move : (inj π) => /injectiveP π_inj; apply /injectiveP => a1 a2. 
+rewrite !ffunE; move/(congr1 (@ssval nat_eqType _)) /eqP.
+rewrite (inj_eq π_inj); move/eqP /(congr1 (@ssval nat_eqType _)).
+by apply val_inj.
+Qed.
 
+Definition perm_of_finPerm π := Perm (perm_of_finPerm_subproof π).
+Coercion perm_of_finPerm : finPerm >-> perm_type.
 
 Lemma in_support π a: a \in (support π) <-> (π a != a).
 Proof. 
@@ -32,6 +41,9 @@ split.
   by move => kf; rewrite/fun_of_perm /fun_of_finsfun in_fnd can. 
   by apply:contraR => H; rewrite /fun_of_perm /fun_of_finsfun not_fnd.
 Qed.
+
+(* Est-ce qu'on peut afficher par défaut a: atom plutot que
+ a : Key.sort nat_KeyType ? *)
 
 (* Ici je donne le nom "can" à l'hypothèse qui dit que 
 les finsfun sont canoniques, ou "inj" à l'hypothèse qui 
@@ -86,3 +98,6 @@ case:permP; case:permP => {a1} {a2} a1 Ha1 a2 Ha2; first by [].
   - move : (inj π) => /injectiveP π_inj /eqP. rewrite (inj_eq π_inj).
     by move => ?; apply/eqP.
 Qed.
+
+Definition perm_inv (π : finPerm) := FinPerm ((perm_of p)^-1)%g.
+Local Notation "p ^-1" := (perm_inv p).
