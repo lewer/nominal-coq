@@ -12,72 +12,46 @@ Definition atom := nat.
 Section FinPerm.
 
 Record finPerm := FinPerm {
-  perm_of : finsfun (@id atom);
-  stable (a:atom) (kf: a \in domf (finsfun_of perm_of)): (finsfun_of perm_of).[kf]%fmap \in domf (finsfun_of perm_of);
-   inj : injectiveb (finsfun_of perm_of)
+  perm_of :> finsfun (@id atom);
+  _ : injective_finsfun_id  perm_of
 }.
 
-Definition fun_of_perm π := fun_of_finsfun (perm_of π).
-Coercion fun_of_perm : finPerm >-> Funclass.
+Lemma finperm_inj (π : finPerm) : injective π.
+Proof. by case:π => *; apply/injective_finsfunP. Qed.
 
-Definition support (π : finPerm) :=
-  domf (finsfun_of (perm_of π)).
-
-Lemma perm_of_finPerm_subproof (π : finPerm) : 
-  injectiveb [ffun x:support π => SeqSub (stable (ssvalP x))].
-Proof.
-move : (inj π) => /injectiveP π_inj; apply /injectiveP => a1 a2. 
-rewrite !ffunE; move/(congr1 (@ssval nat_eqType _)) /eqP.
-rewrite (inj_eq π_inj); move/eqP /(congr1 (@ssval nat_eqType _)).
-by apply val_inj.
-Qed.
-
-Definition perm_of_finPerm π := Perm (perm_of_finPerm_subproof π).
-Coercion perm_of_finPerm : finPerm >-> perm_type.
-
-Lemma in_support π a: a \in (support π) <-> (π a != a).
+Lemma finsupp_stable (π : finPerm) : forall (a : atom), a \in finsupp π -> π a \in finsupp π.
 Proof. 
-split.
-  by move => kf; rewrite/fun_of_perm /fun_of_finsfun in_fnd can. 
-  by apply:contraR => H; rewrite /fun_of_perm /fun_of_finsfun not_fnd.
+case:π => f. rewrite /injective_finsfun_id /= => /andP [_ /forallP f_stable] a af. 
+by apply (f_stable (SeqSub af)).
 Qed.
 
-(* Est-ce qu'on peut afficher par défaut a: atom plutot que
- a : Key.sort nat_KeyType ? *)
-
-(* Ici je donne le nom "can" à l'hypothèse qui dit que 
-les finsfun sont canoniques, ou "inj" à l'hypothèse qui 
-dit qu'une permutation est injective. Si je remplace
-dans la définition de finPerm inj par _, comment est-ce
-que j'y fais référence dans les preuves ? *) 
-
-Lemma perm_default π a: a\notin (support π) -> π a = a.
-Proof. by move => H; rewrite /fun_of_perm /fun_of_finsfun not_fnd. Qed.
-
-(* Ici est-ce qu'il vaut mieux conclure π a = a ou π a == a ?
-Le premier permet des rewrite, mais le deuxième est
-plus précis...
-Et si je veux écrire une équivalence entre a\notin (support π) et π a = a,
-c'est quoi la meilleure façon de l'écrire ?
- *) 
-
-CoInductive perm_spec (π : finPerm) : atom -> bool -> atom -> Type :=
-  | PermOut a : a \notin support π -> perm_spec π a false a
-  | PermIn a  (kf: a \in support π) : perm_spec π a true (finsfun_of (perm_of π)).[kf]%fmap.
-
-(* Les finsfun_of (perm_of ...) à rallonge, c'est pas grave ? *)
-
-Lemma permP (π : finPerm) (a : atom) : perm_spec π a (a \in support π) (π a).
+Lemma surfinsupp_stable (π : finPerm) (S : {fset atom}) :
+  finsupp π \fsubset S -> forall (a : atom), a \in S -> π a \in S. 
 Proof.
-case_eq (a \in support π); move => H.
-  by rewrite /fun_of_perm /fun_of_finsfun in_fnd; apply:PermIn.
-  rewrite (perm_default); last by apply:negbT.
-  by apply PermOut; apply negbT. 
+move=> /fsubsetP S_surfinsupp a; case:finsfunP; first by []. 
+by move => a_supp aS; apply/S_surfinsupp/finsupp_stable.
 Qed.
 
-(* J'ai jamais vu de case_eq dans les tutos ssreflect
-On doit pouvoir l'éviter... ? *)
+Definition ffun_of_finPerm (π : finPerm) (S : {fset atom}) 
+           (supp_incl_S : finsupp π \fsubset S) := 
+  [ffun x:S => SeqSub (surfinsupp_stable supp_incl_S (ssvalP x))].
 
+Lemma perm_of_finPerm_subproof (π : finPerm) (S : {fset atom}) 
+      (supp_incl_S : finsupp π \fsubset S) : injectiveb (ffun_of_finPerm supp_incl_S). 
+Proof.
+apply/injectiveP => a b; rewrite !ffunE; move/(congr1 val) => πa_eq_πb. 
+by apply/val_inj/(finperm_inj πa_eq_πb).
+Qed.
+
+Definition perm_of_finPerm π (S : {fset atom}) (supp_incl_S : finsupp π \fsubset S) := 
+  Perm (perm_of_finPerm_subproof supp_incl_S).
+
+(* ne compile pas... ?!?! *)
+
+Lemma finPerm_of_perm_1_subproof (T:{fset atom}) (p:{perm T}) (a:atom)
+ (kf: a \in T) : val ((pval p) (SeqSub kf)) \in T. 
+Proof. 
+ 
 Definition eq_perm (π π' : finPerm) :=
     [forall a:support π, π (val a) == π' (val a) :> nat]
  && [forall a: support π', π' (val a) == π (val a) :> nat].
@@ -92,12 +66,13 @@ move => a1 a2.
 case:permP; case:permP => {a1} {a2} a1 Ha1 a2 Ha2; first by [].
   -have : (finsfun_of (perm_of π)) {| ssval := a1; ssvalP := Ha1 |} \in support π
     by rewrite /support; apply stable.
-  move => H1 H2; move : H2 H1 <- =>  H. admit.
+   move => H1 H2; move : H2 H1 <- =>  H. admit.
   -have : (finsfun_of (perm_of π)) {| ssval := a2; ssvalP := Ha2 |} \in support π
-    by rewrite /support; apply stable.                                                             move => H1 H2; move : H2 H1 <- => H. admit.   
+    by rewrite /support; apply stable.
+   move => H1 H2; move : H2 H1 <- => H. admit.   
   - move : (inj π) => /injectiveP π_inj /eqP. rewrite (inj_eq π_inj).
     by move => ?; apply/eqP.
 Qed.
 
-Definition perm_inv (π : finPerm) := FinPerm ((perm_of p)^-1)%g.
+Definition perm_inv (π : finPerm) := FinPerm ((perm_inv (perm_of_finPerm π))).
 Local Notation "p ^-1" := (perm_inv p).
