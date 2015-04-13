@@ -1057,6 +1057,15 @@ Lemma in_FSet A (X : {set A}) (k : K) (kA : k \in A) :
   (k \in FSet X) = (SeqSub kA \in X).
 Proof. by rewrite -val_in_FSet. Qed.
 
+(* :TODO: rename *)
+Lemma in_FSetE A (X : {set A}) (k : K) :
+  k \in FSet X -> {kA : k \in A & SeqSub kA \in X}.
+Proof.
+rewrite inE sort_keysE => /mapP [/= x x_in_X ->].
+exists (valP x); rewrite mem_enum in x_in_X.
+by set y := (y in y \in X); suff <- : x = y by []; apply: val_inj.
+Qed.
+
 Lemma fsubK A B : A \fsubset B -> FSet (fsub B A) = A.
 Proof.
 move=> AsubB; apply/fsetP => k /=; symmetry.
@@ -1285,19 +1294,104 @@ End Ops2.
 
 Section FinSFun.
 
-Variables (K:keyType) (V:eqType).
+Variables (K:keyType) (V:eqType) (default : K -> V).
 
-Record finsfun (default : K -> V) := FinSFun {
+Record finsfun := FinSFun {
   finsfun_of : {fmap K -> V};
-  can : forall (k : K) (kf : k \in finsfun_of), finsfun_of.[kf] != default k
+  _ : forall (k : K) (kf : k \in finsfun_of), finsfun_of.[kf] != default k
 }.
 
-Definition fun_of_finsfun default (f : finsfun default) (k : K) :=
+Fact finsfun_subproof (f : finsfun) (k : K) (kf : k \in finsfun_of f) :
+  (finsfun_of f).[kf] != default k.
+Proof. by case: f k kf. Qed.
+
+Definition fun_of_finsfun (f : finsfun) (k : K) :=
   odflt (default k) (finsfun_of f).[? k].
 
 Coercion fun_of_finsfun : finsfun >-> Funclass.
 
+Definition finsupp (f : finsfun) := domf (finsfun_of f).
+
+Lemma mem_finsupp (f : finsfun) (k : K) : (k \in finsupp f) = (f k != default k).
+Proof.
+rewrite /fun_of_finsfun; case: fndP; rewrite ?eqxx //=.
+by move=> kf; rewrite finsfun_subproof.
+Qed.
+
+Lemma finsfun_dflt (f : finsfun) (k : K) : k \notin finsupp f -> f k = default k.
+Proof. by rewrite mem_finsupp negbK => /eqP. Qed.
+
+CoInductive finsfun_spec (f : finsfun) (k : K) : V -> bool -> Type :=
+  | FinsfunOut : k \notin finsupp f -> finsfun_spec f k (default k) false
+  | FinsfunIn  (kf : k \in finsupp f) : finsfun_spec f k (f k) true.
+
+Lemma finsfunP (f : finsfun) (k : K) : finsfun_spec f k (f k) (k \in finsupp f).
+Proof.
+have [kf|kNf] := boolP (_ \in _); first by constructor.
+by rewrite finsfun_dflt // ; constructor.
+Qed.
+
+Variables (f : K -> V) (S : {fset K}).
+Let suppS := FSet [set a : S | f (val a) != default (val a)].
+Let fmapS := FinMap [ffun a : suppS => f (val a)].
+
+Fact finsfunS_subproof (k : K) (kfS : k \in suppS) : fmapS.[kfS] != default k.
+Proof. by rewrite ffunE; move: kfS => /in_FSetE [kS /=]; rewrite in_set. Qed.
+
+Definition finsfun_of_fun (f : K -> V) (S : {fset K}) :=
+  @FinSFun fmapS finsfunS_subproof.
+
+Lemma finsfunE : 
+  (forall a : K, f a != default a -> a \in S) -> (finsfun_of_fun f S) =1 f.  
+Proof.
+move => H a; symmetry.
+rewrite/finsfun_of_fun /fun_of_finsfun /=. case: fndP => /=.
+by move => kf; rewrite ffunE. 
+apply:contraNeq; move=> fa_neq_dflt.
+have /H a_in_S := fa_neq_dflt.
+by rewrite in_FSet inE /=.
+Qed.
+
+Lemma finsfun_injective_inP  (g : finsfun) :
+  reflect {in S &, injective g} (injectiveb [ffun x : S => g (val x)]).
+Proof.
+apply: (iffP (@injectiveP _ _ _)) => g_inj a b; last first.
+  by rewrite !ffunE => *; apply: val_inj; apply: g_inj => //; apply: valP.
+move=> aS bS eq_ga_gb; suff: (SeqSub aS) = (SeqSub bS) by move=> [].
+by apply: g_inj; rewrite !ffunE.
+Qed.
+
 End FinSFun.
+
+Section InjectiveFinSFun.
+
+Variables (K : keyType) (V : eqType).
+
+
+Definition injective_finsfun_id : pred (finsfun (@id K)) :=
+  [pred g | (injectiveb [ffun a : finsupp g => g (val a)])
+            && [forall a : finsupp g, g (val a) \in finsupp g]].
+
+Lemma injective_finsfunP (g : finsfun (@id K)) :
+  reflect (injective g) (injective_finsfun_id g).
+Proof. 
+rewrite /injective_finsfun_id; apply: (iffP idP).
+  move=> /andP [/finsfun_injective_inP inj_g /forallP stable_g ] a b.
+  wlog /andP [ag bg] : a b / (a \in finsupp g) && (b \notin finsupp g) => [hwlog|].
+    case: (finsfunP g b); case: (finsfunP g a) => //; last by move=> *; exact: inj_g.
+      by move=> ag bg ga_eq_b; apply: hwlog; rewrite ?ag ?bg ?(finsfun_dflt bg).
+    by move=> ag bg ga_eq_b; symmetry; apply: hwlog; rewrite ?ag ?bg ?(finsfun_dflt ag).
+  rewrite (finsfun_dflt bg) => ga_eq_b; move: bg; rewrite -ga_eq_b.
+  by rewrite (stable_g (SeqSub ag)).
+
+move => g_inj; apply/andP; split.
+  by apply/injectiveP => a b; rewrite !ffunE => eq_ga_gb; apply/val_inj/g_inj.
+apply/forallP => a.
+by rewrite mem_finsupp (inj_eq g_inj) -mem_finsupp; apply/valP.
+Qed.
+
+End InjectiveFinSFun.
+
 
 (*
 
