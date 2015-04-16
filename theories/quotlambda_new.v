@@ -156,6 +156,14 @@ End PermFinPerm.
 
 Section FinPermSpec.
 
+Lemma finPerm_can (π : finPerm) (a : atom) (aπ : a\in finsupp π) :
+  π a = (val (can_perm_of_finPerm π (SeqSub aπ))).
+Proof.
+have t : π a = val (SeqSub (perm_stable (fsubsetAA (finsupp π)) aπ)) by []. 
+rewrite t. congr val.
+by rewrite perm_of_finPermE. 
+Qed.
+
 CoInductive finPerm_spec (π : finPerm) (a : atom) : atom -> bool -> Type :=
   | FinPermOut : a \notin finsupp π -> finPerm_spec π a a false
   | FinPermIn  (aπ : a \in finsupp π) : 
@@ -166,8 +174,7 @@ Proof.
 case:finsfunP; first by exact: FinPermOut.
 move => aπ. suff: π a = (val (can_perm_of_finPerm π (SeqSub aπ))).
   by move ->; apply: FinPermIn.
-have t : π a = val (SeqSub (perm_stable (fsubsetAA (finsupp π)) aπ)) by [].
-rewrite t. congr val. by rewrite perm_of_finPermE.
+exact: finPerm_can.
 Qed.
 
 End FinPermSpec.
@@ -175,32 +182,28 @@ End FinPermSpec.
 Section FinPermInvDef.
 
 Variable (π : finPerm).
+Let p := can_perm_of_finPerm π.
+Let inv_p_ffun := [ffun a : finsupp π => val ( p^-1%g a)].
 
-Definition finmap_inv_subproof :=
-  FinMap [ffun a : finsupp π => val ((perm_inv (can_perm_of_finPerm π)) a)].
-
-Fact finmap_can_subproof : 
-  [forall a: domf (finmap_inv_subproof) , finmap_inv_subproof a != @id atom (val a)].
+Fact can_p_subproof : [forall a : finsupp π ,  inv_p_ffun a != val a].
 Proof.
-apply/forallP => x. rewrite ffunE val_eqE.
-pose p := can_perm_of_finPerm π. rewrite (can2_eq (permKV p) (permK p)).  
+apply/forallP => a. rewrite ffunE val_eqE.
+rewrite (can2_eq (permKV p) (permK p)).
 rewrite perm_of_finPermE -val_eqE eq_sym -mem_finsupp. exact: ssvalP.
 Qed.
 
-Definition finsfun_inv_subproof := FinSFun finmap_can_subproof.
+Definition finsfun_invp_subproof := @finsfun_of_can_ffun _ _ (@id atom) _ _ can_p_subproof.
 
-Fact injective_finsfun_subproof : injectiveb_finsfun_id finsfun_inv_subproof.
+Fact injective_finsfun_subproof : injectiveb_finsfun_id finsfun_invp_subproof.
 Proof.
 apply/andP. split.
-  apply/injectiveP => a b. rewrite !ffunE /=.
-  case: finsfunP; case: (finsfunP finsfun_inv_subproof (ssval b)); rewrite !ssvalP //=. 
-  rewrite/fun_of_finsfun !in_fnd ?ssvalP //= => bπ aπ _ _.
-  rewrite !ffunE => /eqP. rewrite val_eqE => /eqP πa_eq_πb.
-    suff :  {| ssval := ssval a; ssvalP := aπ |} = {| ssval := ssval b; ssvalP := bπ |}.  
-    by move/(congr1 val) => /= ; apply/val_inj. 
+  apply/injectiveP => a b. rewrite !ffunE !finsfun_of_can_ffunE; rewrite ?ssvalP //=.
+  move => bπ aπ. rewrite !ffunE => pa_eq_pb.
+  suff: {| ssval := ssval a; ssvalP := aπ |} = {| ssval := ssval b; ssvalP := bπ |}.
+    by move/(congr1 val) => /=; apply/val_inj. 
   apply/eqP. rewrite -(inj_eq (@perm_inj _ (perm_inv (can_perm_of_finPerm π)))).
-  by apply/eqP.
-apply/forallP => a. rewrite/fun_of_finsfun. rewrite in_fnd; first by apply: valP.
+  rewrite -val_eqE. by apply/eqP.
+apply/forallP => a. rewrite !finsfun_of_can_ffunE; first by apply: valP.
 move => aπ /=. rewrite ffunE. exact: valP.
 Qed.
 
@@ -213,22 +216,42 @@ End FinPermInvDef.
 
 Local Notation "p ^-1" := (finPerm_inv p) : finperm_scope.
 
+Section Theory.
+
+Implicit Types (π : finPerm) (a : atom).  
+
+Lemma can_inv π : can_perm_of_finPerm π^-1 = (can_perm_of_finPerm π)^-1%g.
+Proof.
+apply permP => a. rewrite perm_of_finPermE.
+apply val_inj => /=. rewrite finsfun_of_can_ffunE; first by apply: valP.
+move => aπ /=. rewrite ffunE.  congr ssval. 
+suff : {| ssval := ssval a; ssvalP := aπ |} = a by move ->.
+by apply val_inj.
+Qed.
+
 Lemma perm_invK : involutive finPerm_inv.
 Proof.
-move => π. apply/eq_finPermP => a. 
-case: (finPermP π a) => [ aNπ | aπ].
-  rewrite finsfun_dflt //.  by rewrite -inv_support -inv_support.
-case: finPermP; first by rewrite -inv_support -inv_support aπ.
-move => ainvinvπ. 
+move => π. apply/eq_finPermP/eq1_finPermP/forallP. 
+rewrite fsetUid => a. rewrite !finPerm_can; do ?apply: valP.
+move => aπ ainvinvπ. rewrite val_eqE can_inv can_inv invgK.
+suff : ainvinvπ = aπ by move ->.
+exact: bool_irrelevance.
+Qed.
+
+Lemma myvalK  (S : {fset atom}) (a : S) aS :
+  {| ssval := val a;
+     ssvalP := aS |} = a.
+Proof. by apply val_inj. Qed.
+
+(* le lemme myvalK doit déjà exister, mais je l'ai pas trouvé *)
 
 Lemma permK (π : finPerm) : cancel π π^-1.
 Proof.
-move => a. case:(finsfunP π a) => /= [aπ| aNπ]. 
-  rewrite finsfun_dflt //.
-  pose p := (perm_of_finPerm (fsubsetAA (finsupp π)))^-1%g. move: aπ. 
-  apply contra.  exact (fsubsetP (finsfun_of_perm_incl p) a).
-rewrite finsfun_of_permE in_fun_of_ffun. 
-  apply/perm_stable => //=. by apply fsubsetAA. 
-move => πa_supp. rewrite ffunE. 
+move => a. case: (finPermP π a) => [aNπ | aπ].
+  by rewrite finsfun_dflt.
+rewrite finPerm_can; first by apply: valP.
+move => πaπ. by rewrite myvalK can_inv -permM mulgV perm1.
+Qed.
 
-*)
+
+        

@@ -1307,8 +1307,8 @@ Fact finsfun_subproof (f : finsfun) :
 Proof. case:f => f f_stable k kf /=. exact (forallP f_stable (SeqSub kf)). Qed.
 
 Definition fun_of_finsfun (f : finsfun) (k : K) :=
-  odflt (default k) (finsfun_of f).[? k].
-
+  odflt (default k) (finsfun_of f).[? k].     
+           
 Coercion fun_of_finsfun : finsfun >-> Funclass.
 
 (* à mettre au bon endroit *)
@@ -1370,6 +1370,21 @@ apply:contraNeq; move=> fa_neq_dflt.
 have /H a_in_S := fa_neq_dflt.
 by rewrite in_FSet inE /=.
 Qed.
+
+(* Définition d'une finsfun à partir d'une ffun qui *)
+(* ne fixe aucun point de son domaine. On obtient *)
+(* une finsfun dont le support est définitionnellement *)
+(* égal au domaine de la finfun *)
+ 
+Definition finsfun_of_can_ffun (T : {fset K}) (g : {ffun T -> V}) 
+          (can_g : [forall k : T ,  g k != default (val k)]) :=
+  @FinSFun (FinMap g) can_g.
+
+Lemma finsfun_of_can_ffunE (T : {fset K}) (g : {ffun T -> V}) 
+          (can_g : [forall k : T ,  g k != default (val k)]) 
+          (k : K) (kg : k \in T) :
+  (finsfun_of_can_ffun can_g) k = g (SeqSub kg). 
+Proof. by rewrite/fun_of_finsfun in_fnd. Qed.
 
 Lemma finsfun_injective_inP  (g : finsfun) :
   reflect {in S &, injective g} (injectiveb [ffun x : S => g (val x)]).
