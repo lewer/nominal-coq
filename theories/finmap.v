@@ -1292,7 +1292,8 @@ Qed.
 
 End Ops2.
 
-Section FinSFun.
+Section FinSFun
+.
 
 Variables (K:keyType) (V:eqType) (default : K -> V).
 
@@ -1359,7 +1360,7 @@ Qed.
 Definition finsfun_of_fun :=
   @FinSFun fmapS finsfunS_subproof.
 
-Lemma finsfunE : 
+Lemma finsfun_of_funE : 
   (forall a : K, f a != default a -> a \in S) -> (finsfun_of_fun) =1 f.  
 Proof.
 move => H a; symmetry.
