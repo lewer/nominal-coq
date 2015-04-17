@@ -3,6 +3,7 @@ Require Import bigop fintype finfun finset generic_quotient perm.
 Require Import tuple.
 Require Import fingroup.
 Require Import finmap.
+Require Import finsfun.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
@@ -75,7 +76,7 @@ End FinPermDef.
 
 Section PermFinPerm.
 
-Let ffun_of_finPerm (π : finPerm) (S : {fset atom}) 
+Definition ffun_of_finPerm (π : finPerm) (S : {fset atom}) 
            (supp_incl_S : finsupp π \fsubset S) := 
   [ffun x:S => SeqSub (perm_stable supp_incl_S (ssvalP x))].
 
@@ -98,6 +99,7 @@ Lemma perm_of_finPermE (π : finPerm) (S : {fset atom})
   forall a : S, perm_of_finPerm supp_incl_S a = SeqSub (perm_stable supp_incl_S (ssvalP a)).
 Proof. move => a. by rewrite/perm_of_finPerm -pvalE /ffun_of_finPerm /= ffunE. Qed.
 
+(* Probablement inutile 
 Let finsfun_of_perm (S : {fset atom}) (p : {perm S}) :=
 finsfun_of_fun (@id atom) (fun_of_ffun (@id atom) [ffun x:S => val (p x)]) S. 
 
@@ -154,6 +156,8 @@ Qed.
 
 End PermFinPerm.
 
+*)
+
 Section FinPermSpec.
 
 Lemma finPerm_can (π : finPerm) (a : atom) (aπ : a\in finsupp π) :
@@ -182,6 +186,7 @@ End FinPermSpec.
 Section FinPermInvDef.
 
 Variable (π : finPerm).
+
 Let p := can_perm_of_finPerm π.
 Let inv_p_ffun := [ffun a : finsupp π => val ( p^-1%g a)].
 
@@ -196,31 +201,47 @@ Definition finsfun_invp_subproof := @finsfun_of_can_ffun _ _ (@id atom) _ _ can_
 
 Fact injective_finsfun_subproof : injectiveb_finsfun_id finsfun_invp_subproof.
 Proof.
-apply/andP. split.
-  apply/injectiveP => a b. rewrite !ffunE !finsfun_of_can_ffunE; rewrite ?ssvalP //=.
-  move => bπ aπ. rewrite !ffunE => pa_eq_pb.
-  suff: {| ssval := ssval a; ssvalP := aπ |} = {| ssval := ssval b; ssvalP := bπ |}.
-    by move/(congr1 val) => /=; apply/val_inj. 
-  apply/eqP. rewrite -(inj_eq (@perm_inj _ (perm_inv (can_perm_of_finPerm π)))).
-  rewrite -val_eqE. by apply/eqP.
-apply/forallP => a. rewrite !finsfun_of_can_ffunE; first by apply: valP.
-move => aπ /=. rewrite ffunE. exact: valP.
+apply/andP. split; last first.
+  apply/forallP => a. rewrite !finsfun_of_can_ffunE; first by apply: valP.
+  move => aπ /=. rewrite ffunE. exact: valP.
+apply/injectiveP => a b. rewrite !ffunE !finsfun_of_can_ffunE; rewrite ?ssvalP //=.
+move => bπ aπ. rewrite !ffunE => pa_eq_pb.
+suff: {| ssval := ssval a; ssvalP := aπ |} = {| ssval := ssval b; ssvalP := bπ |}.
+  by move/(congr1 val) => /=; apply/val_inj. 
+apply/eqP. rewrite -(inj_eq (@perm_inj _ (perm_inv (can_perm_of_finPerm π)))).
+rewrite -val_eqE. by apply/eqP.
 Qed.
 
-Definition finPerm_inv := 
+Definition finperm_inv := 
   FinPerm injective_finsfun_subproof.
 
-(* l'égalité finsupp π = finsupp π^-1 est maintenant définitionnelle *)
+Lemma finperm_one_subproof : injectiveb_finsfun_id (@finsfun_one nat_KeyType).
+Proof. by apply/injectiveb_finsfunP/inj_finsfun_one. Qed.
+
+Definition finperm_one := FinPerm finperm_one_subproof.
 
 End FinPermInvDef. 
 
-Local Notation "p ^-1" := (finPerm_inv p) : finperm_scope.
+Section FinPermMulDef.
 
-Section Theory.
+Lemma finperm_mul_subproof (π π' : finPerm) :
+  injectiveb_finsfun_id (@finsfun_comp nat_KeyType π π').
+Proof. apply/injectiveb_finsfunP/inj_finsfun_comp; by apply finperm_inj. Qed.
 
-Implicit Types (π : finPerm) (a : atom).  
+Definition finperm_mul (π π' : finPerm) :=
+  FinPerm (finperm_mul_subproof π π').
 
-Lemma can_inv π : can_perm_of_finPerm π^-1 = (can_perm_of_finPerm π)^-1%g.
+Notation "1" := finperm_one.
+Notation "π * π'" := (finperm_mul π π').
+Notation "π ^-1" := (finperm_inv π) : finperm_scope.
+Notation "π '|'" := (can_perm_of_finPerm π) 
+  (at level 0) : finperm_scope.  
+
+Section FinPermTheory.
+
+Implicit Types (π : finPerm) (a : atom).
+
+Lemma can_inv π : π^-1| = π|^-1%g.
 Proof.
 apply permP => a. rewrite perm_of_finPermE.
 apply val_inj => /=. rewrite finsfun_of_can_ffunE; first by apply: valP.
@@ -229,7 +250,7 @@ suff : {| ssval := ssval a; ssvalP := aπ |} = a by move ->.
 by apply val_inj.
 Qed.
 
-Lemma perm_invK : involutive finPerm_inv.
+Lemma finperm_invK : involutive finperm_inv.
 Proof.
 move => π. apply/eq_finPermP/eq1_finPermP/forallP. 
 rewrite fsetUid => a. rewrite !finPerm_can; do ?apply: valP.
@@ -245,7 +266,7 @@ Proof. by apply val_inj. Qed.
 
 (* le lemme myvalK doit déjà exister, mais je l'ai pas trouvé *)
 
-Lemma permK (π : finPerm) : cancel π π^-1.
+Lemma permK π : cancel π π^-1.
 Proof.
 move => a. case: (finPermP π a) => [aNπ | aπ].
   by rewrite finsfun_dflt.
@@ -253,5 +274,88 @@ rewrite finPerm_can; first by apply: valP.
 move => πaπ. by rewrite myvalK can_inv -permM mulgV perm1.
 Qed.
 
+Lemma permVK π : cancel π^-1 π.
+Proof. by move=> a; rewrite -{1}[π]finperm_invK permK. Qed.
 
-        
+Lemma finperm_invP : left_inverse finperm_one finperm_inv finperm_mul.
+Proof.
+move => π. apply/eq_finPermP => a. 
+by rewrite finsfunM /= permK finsfun1. 
+Qed.
+
+Lemma finperm_invVP : right_inverse finperm_one finperm_inv finperm_mul.
+Proof. move => π. by rewrite -(finperm_invP π^-1) finperm_invK. Qed.
+
+End FinPermTheory.
+
+Section NominalDef.
+
+Implicit Types (π : finPerm).
+
+Record perm_setoid_mixin (X : Type) (R : X -> X -> Prop) := PermSetoidMixin {
+  act : finPerm -> X -> X;
+  _ : forall x, R ((act 1) x) x;
+  _ : forall π π' x, R (act (π * π') x) (act π (act π' x));
+  _ : forall x y π, R x y -> R (act π x) (act π y)
+}.
+
+Record nominal_mixin (X : choiceType) := NominalMixin {
+  perm_setoid_of : @perm_setoid_mixin X (@eq X);
+  support : X -> {fset atom}; 
+  _ : forall π x, 
+        (forall a : atom, a \in support x -> π a = a) -> (act perm_setoid_of π x) = x
+}.
+
+                                    
+End NominalDef.
+
+Section NominalAtoms.
+
+Implicit Types (π : finPerm) (a : atom).
+
+Local Notation atomact := (fun (π : finPerm) (a : atom) => π a).
+
+Lemma atomact1 : forall (a : atom), atomact 1 a = a.
+Proof. by move => a /=; rewrite finsfun1. Qed.
+
+Lemma atomactM : forall π π' a, atomact (π * π') a = atomact π (atomact π' a).
+Proof. by move => π π' a /=; rewrite finsfunM. Qed.
+
+Lemma atomactproper : forall x y π, x = y -> (atomact π x) = (atomact π y).
+Proof. by move => x y π ->. Qed.
+
+Definition atom_nominal_setoid_mixin := 
+  @PermSetoidMixin atom (@eq atom) atomact atomact1 atomactM atomactproper.   
+
+Lemma atomact_id π a :
+     (forall b, b \in fset1 a -> atomact π b = b) -> atomact π a = a.
+Proof. apply. by rewrite in_fset1. Qed.
+
+Definition atom_nominal_mixin :=
+  @NominalMixin nat_choiceType atom_nominal_setoid_mixin _ atomact_id.
+
+End NominalAtoms.
+
+Section NominalTheory.
+
+Variables (T : choiceType) (X : nominal_mixin T). 
+Implicit Types (π : finPerm) (x : T).
+
+Local Notation act π := (act (perm_setoid_of X) π ).
+Local Notation support := (support X).
+
+Lemma act1 : act 1 =1 id.
+Proof. by case: X; case. Qed.
+
+Lemma actM (π π' : finPerm) x : act (π * π') x = act π (act π' x).
+Proof. by case: X; case. Qed.
+
+Lemma act_id π x : (forall a : atom, a \in support x -> π a = a) 
+                   -> (act π x) = x.
+Proof. case: X => ps supp. exact. Qed.
+
+Lemma actK π : cancel (act π) (act π^-1).
+Proof. by move => x; rewrite -actM (finperm_invP π) act1. Qed.
+
+Lemma actVK π : cancel (act π^-1) (act π).
+Proof. by move => x; rewrite -actM (finperm_invVP π) act1. Qed.
