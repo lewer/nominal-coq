@@ -74,7 +74,7 @@ Proof. by move=> /card0_eq T0; apply: finfun => t; move: (T0 t). Defined.
 
 Definition oextract (T : Type) (o : option T) : o -> T :=
   if o is Some t return o -> T then fun=> t
-  else False_rect T \o 
+  else False_rect T \o
     @eq_ind bool None (fun e => if e then False else True) I true.
 
 Lemma oextractP (T : Type) (x : T) (xP : Some x) : oextract xP = x.
@@ -373,7 +373,7 @@ Proof. by rewrite !inE /= !sort_keysE !mem_filter. Qed.
 Lemma in_fsetD1 A b a : (a \in A :\ b) = (a != b) && (a \in A).
 Proof. by rewrite in_fsetD in_fset1. Qed.
 
-Definition in_fsetE := 
+Definition in_fsetE :=
   (in_fset0, in_fset1, in_fsetU, in_fset1U, in_fsetI, in_fsetD, in_fsetD1).
 
 Lemma fsetIC (A B : {fset K}) : A :&: B = B :&: A.
@@ -453,12 +453,12 @@ Qed.
 Lemma fsubsetAA A : A \fsubset A. Proof. exact/fsubsetP. Qed.
 Hint Resolve fsubsetAA.
 
-Definition fincl A B (AsubB : A \fsubset B) (a : A) : B := 
+Definition fincl A B (AsubB : A \fsubset B) (a : A) : B :=
   SeqSub ((fsubsetP AsubB) _ (ssvalP a)).
 
 Definition fsub B A : {set B} := [set x : B | ssval x \in A].
 
-Lemma fsubE A B (AsubB : A \fsubset B) : 
+Lemma fsubE A B (AsubB : A \fsubset B) :
   fsub B A = [set fincl AsubB x | x in {: A}].
 Proof.
 apply/setP => x; rewrite in_set; apply/idP/imsetP => [|[[a aA] aA' ->]] //.
@@ -574,7 +574,7 @@ rewrite -(inj_in_eq (@fsub_inj (A :|: B))) -?topredE //=.
 by rewrite eqEcard !(@subset_fsubE (A :|: B)) ?(@card_fsub (A :|: B)).
 Qed.
 
-Lemma fproperEcard A B : 
+Lemma fproperEcard A B :
   (A \fproper B) = (A \fsubset B) && (#|{: A}| < #|{: B}|)%N.
 Proof. by rewrite fproperEneq ltnNge andbC eqEfcard; case: (A \fsubset B). Qed.
 
@@ -781,7 +781,7 @@ Lemma fsetDP A B x : reflect (x \in A /\ x \notin B) (x \in A :\: B).
 Proof. by rewrite in_fsetD andbC; apply: andP. Qed.
 
 Lemma fsetSD A B C : A \fsubset B -> A :\: C \fsubset B :\: C.
-Proof. 
+Proof.
 move=> sAB; apply/fsubsetP=> x; rewrite !in_fsetD.
 by case: (x \in C) => //; exact: (fsubsetP sAB).
 Qed.
@@ -878,7 +878,7 @@ Lemma cardfs1 x : #|{: [fset x]}| = 1.
 Proof. by rewrite cardfsE undup_id. Qed.
 
 Lemma cardfsUI A B : #|{: A :|: B}| + #|{: A :&: B}| = #|{: A}| + #|{: B}|.
-Proof. 
+Proof.
 rewrite -!(@card_fsub (A :|: B)) ?(fsubset_trans (fsubsetIl _ _)) //.
 by rewrite fsubU fsubI cardsUI.
 Qed.
@@ -972,7 +972,7 @@ Proof.
 apply/idP/idP => [subA|/andP [AB CA]]; last by rewrite -[A]fsetUid fsetUSS.
 by rewrite !(fsubset_trans _ subA).
 Qed.
- 
+
 Lemma fsubUsetP A B C : reflect (A \fsubset C /\ B \fsubset C) (A :|: B \fsubset C).
 Proof. by rewrite fsubUset; exact: andP. Qed.
 
@@ -1115,10 +1115,9 @@ Inductive fnd_spec V (f : {fmap K -> V}) k : bool -> option V -> Type :=
 | FndOut (kNf : k \notin f) : fnd_spec f k false None.
 
 Definition setf V (f : {fmap K -> V}) (k0 : K) (v0 : V) : {fmap K -> V} :=
-  FinMap [ffun k : (k0 |: domf f) => if val k == k0 :> K then v0 
+  FinMap [ffun k : (k0 |: domf f) => if val k == k0 :> K then v0
                                        else odflt v0 (fnd f (val k))].
 
-  
 End OpsMap.
 
 Prenex Implicits fnd setf.
@@ -1166,7 +1165,7 @@ move=> eq_fg; congr FinMap; apply/ffunP => /= x.
 by do [rewrite -!getfE; do ?exact: valP] => *.
 Qed.
 
-Lemma fmap_fndP V (f g : {fmap K -> V}) : fnd f =1 fnd g -> f = g.
+Lemma fmapP V (f g : {fmap K -> V}) : fnd f =1 fnd g -> f = g.
 Proof.
 move=> fnd_fg; apply: getfP => [|k kMf kMg].
   by apply/fsetP => x; rewrite -!fndSome fnd_fg.
@@ -1220,7 +1219,7 @@ Section Ops2.
 
 Variable K : keyType.
 
-Lemma reducef_subproof V (f : {fmap K -> option V}) 
+Lemma reducef_subproof V (f : {fmap K -> option V})
       (X := FSet [set x : domf f | f x])
       (x : X) (x' := (SeqSub (fsubsetP (FSet_sub _) _ (valP x)))) : f x'.
 Proof.
@@ -1290,7 +1289,10 @@ rewrite ffunE /= Some_oextract; apply: Some_inj; rewrite -in_fnd.
 by rewrite Some_ojoin // ojoinT // -mem_reducef.
 Qed.
 
-End Ops2.
+Lemma get_reducef  V (f : {fmap K -> option V}) k
+  (krf : k \in reducef f) (kf : k \in f):
+  Some (reducef f).[krf] = f.[kf].
+Proof. by rewrite -in_fnd fnd_reducef in_fnd. Qed.
 
 Section FinSFun
 .
@@ -1329,12 +1331,18 @@ Proof. by move => kS; rewrite/fun_of_ffun; case:eqP => kS' //; rewrite kS' in kS
 
 Definition finsupp (f : finsfun) := domf (finsfun_of f).
 
+Lemma fnd_filterf V (f : {fmap K -> V}) P k :
+  (filterf f P).[? k] = if P k then f.[? k] else None.
 Lemma mem_finsupp (f : finsfun) (k : K) : (k \in finsupp f) = (f k != default k).
 Proof.
 rewrite /fun_of_finsfun; case: fndP; rewrite ?eqxx //=.
-by move=> kf; rewrite finsfun_subproof.
+rewrite fnd_reducef; have [[] Pk [] kf] := (ifP, fndP f k);
+do ?by [rewrite in_fnd ?ffunE /= ?Pk|rewrite not_fnd ?ffunE /= ?Pk].
 Qed.
 
+Lemma get_filterf V (f : {fmap K -> V}) P k
+  (kff : k \in filterf f P) (kf : k \in f) :
+  (filterf f P).[kff] = f.[kf].
 Lemma finsfun_dflt (f : finsfun) (k : K) : k \notin finsupp f -> f k = default k.
 Proof. by rewrite mem_finsupp negbK => /eqP. Qed.
 
@@ -1344,6 +1352,8 @@ CoInductive finsfun_spec (f : finsfun) (k : K) : V -> bool -> Type :=
 
 Lemma finsfunP (f : finsfun) (k : K) : finsfun_spec f k (f k) (k \in finsupp f).
 Proof.
+apply: Some_inj; rewrite get_reducef ffunE /=; case: ifPn => //.
+by move: kff; rewrite mem_filterf => /andP [->].
 have [kf|kNf] := boolP (_ \in _); first by constructor.
 by rewrite finsfun_dflt // ; constructor.
 Qed.
@@ -1414,12 +1424,21 @@ End FinSFun.
 Section InjectiveFinSFun.
 
 Variables (K : keyType) (V : eqType).
+Lemma fnd_rem V (f : {fmap K -> V}) (k k' : K) :
+  f.[~ k].[? k'] = if k' != k then f.[? k'] else None.
+Proof. by rewrite fnd_filterf. Qed.
 
-
+Lemma get_rem V (f : {fmap K -> V}) (k k' : K)
+      (k'f : k' \in f) (k'fk : k' \in f.[~ k]) :
+      f.[~ k].[k'fk] = f.[k'f].
+Proof. by rewrite get_filterf. Qed.
 Definition injectiveb_finsfun_id : pred (finsfun (@id K)) :=
   [pred g | (injectiveb [ffun a : finsupp g => g (val a)])
             && [forall a : finsupp g, g (val a) \in finsupp g]].
 
+Lemma setf_get V (f : {fmap K -> V}) (k : K) (kf : k \in f) :
+  f.[k <- f.[kf]] = f.
+Proof. by apply/fmapP=> k'; rewrite fnd_setf -in_fnd; case: eqP => [->|]. Qed.
 Lemma injectiveb_finsfunP (g : finsfun (@id K)) :
   reflect (injective g) (injectiveb_finsfun_id g).
 Proof. 
@@ -1438,6 +1457,12 @@ apply/forallP => a.
 by rewrite mem_finsupp (inj_eq g_inj) -mem_finsupp; apply/valP.
 Qed.
 
+(* Lemma setf_rem V (f : {fmap K -> V}) (k : K) (v : V) : k \in f -> *)
+(*   f.[~ k].[k <- v] = f.[k <- v]. *)
+(* Proof. *)
+(* move=> kf; apply: congr_fmap => k' /=; last by rewrite get_rem; case: eqP. *)
+(* by rewrite keys_rem !in_cons mem_rem_uniq // inE /=; case: eqP. *)
+(* Qed. *)
 Lemma injective_finsfunP (g : finsfun (@id K)) :
   injective g <->
   exists2 S : {fset K}, (finsupp g \fsubset S)
@@ -1458,38 +1483,14 @@ Qed.
   
 End InjectiveFinSFun.
 
+End Ops2.
 
 (*
 
-Lemma fnd_filterd V (f : {fmap K -> V}) P k :
-  (filterf f P).[? k] = if P k then f.[?k] else None.
-Proof.
-rewrite fnd_reducef.
 
 (* PROOF IN PROGRESS *)
 
 
-Lemma get_rem V (v0 : V) (f : {fmap K -> V}) (k k' : K) :
-  (f.[~ k]).[k' | v0] = if k' == k then v0 else f.[k' | v0].
- Proof.
-rewrite (remfE v0) fmapK mem_rem_uniq // inE /=; case: eqP => //= _.
-by have [//|kf] := boolP (_ \in _); rewrite get_default.
-Qed.
-
-Lemma fnd_rem V (f : {fmap K -> V}) (k k' : K) :
-  f.[~ k].[k'] = if k' == k then None else f.[k'].
-Proof.
-have [_|v _ _] := pre_finmapP f; first by rewrite !fnd_default // if_same.
-by rewrite !(fndE v) get_rem mem_remf; case: eqP; case: (_ \in _).
-Qed.
-
-Lemma setf_get V (v0 : V) (f : {fmap K -> V}) (k : K) :
- f.[k <- f.[k | v0]] = if k \in f then f else f.[k <- v0].
-Proof.
-case: ifP => kf; last by rewrite get_default // kf.
-apply: (@getP _ v0); first by rewrite keys_set /= kf undup_keys sort_keys.
-by move=> k' _; have [->|nk''] := eqVneq k' k;  rewrite (setfK,setfNK).
-Qed.
 
 Lemma setf_rem V (f : {fmap K -> V}) (k : K) (v : V) : k \in f ->
   f.[~ k].[k <- v] = f.[k <- v].
@@ -1806,8 +1807,8 @@ Definition fmap_encode V (f : {fmap K -> V}) :
   Tagged (fun ks => {ffun seq_sub ks -> V}) (ffun_of_fmap f).
 
 Definition fmap_decode V (f : {ks : seq K & {ffun seq_sub ks -> V}}) :
-  {fmap K -> V} := [fmap k kf in tag f => tagged f (SeqSub kf)]. 
-  
+  {fmap K -> V} := [fmap k kf in tag f => tagged f (SeqSub kf)].
+
 Lemma fmap_encodeK V : cancel (@fmap_encode V) (@fmap_decode V).
 Proof.
 rewrite /fmap_decode => f; apply/fndP => k //=.
