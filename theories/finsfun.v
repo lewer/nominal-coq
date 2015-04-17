@@ -135,7 +135,7 @@ split; last by move ->.
 case: f; case: g => g can_g f can_f ff_eq_fg. suff f_eq_g : f = g.
   move:f_eq_g can_g can_f ff_eq_fg -> => can_g can_f _. congr FinSFun.
   by apply bool_irrelevance.
-apply/fmap_fndP=> k. case:fndP; case:fndP => //.
+apply/fmapP=> k. case:fndP; case:fndP => //.
  - move => kg kf. congr Some. move:(ff_eq_fg k). by rewrite /fun_of_finsfun !in_fnd.
  - move => kNg kf. move : (ff_eq_fg k). rewrite/fun_of_finsfun in_fnd not_fnd //= => /eqP.
    by rewrite (negbTE (forallP can_f (SeqSub kf))).
@@ -203,44 +203,51 @@ Section InjectiveFinSFun.
 
 Variables (K : keyType) (V : eqType).
 
+Let equivalent (Ps : seq Prop) :=
+  if Ps is P0 :: Ps then
+  let fix aux (P : Prop) (Qs : seq Prop) :=
+      if Qs is Q :: Qs then (P -> Q) /\ (aux Q  Qs) else P -> P0
+  in aux P0 Ps else True.
+
+Lemma injective_finsfun_subproof (g : finsfun (@id K)) :
+  equivalent [:: injective g
+              ; let S := finsupp g in
+                {in S &, injective g} /\ forall a : S, g (val a) \in S
+              ; exists2 S : {fset K}, (finsupp g \fsubset S)
+                & {in S &, injective g} /\ forall a : S, g (val a) \in S].
+Proof.
+split => /= [g_inj|]; last split=> [[g_inj g_st]|[S gS [g_inj g_st]] a b].
+- split=> [a b ? ?|a]; first exact: g_inj.
+  by rewrite mem_finsupp (inj_eq g_inj) -mem_finsupp; apply/valP.
+- by exists (finsupp g)=> //; apply: fsubsetAA.
+have Nfinsupp := contra (fsubsetP gS _).
+wlog /andP [aS bNS] : a b / (a \in S) && (b \notin S) => [hwlog|]; last first.
+  rewrite (finsfun_dflt (Nfinsupp _ bNS)) => gb_eq_a.
+  by move: bNS; rewrite -gb_eq_a (g_st (SeqSub aS)).
+have [[aS|aNS] [bS|bNS]] := (boolP (a \in S), boolP (b \in S)); first 3 last.
+- by rewrite !finsfun_dflt // ?Nfinsupp.
+- exact: g_inj.
+- by apply: hwlog; rewrite aS.
+by move=> gab; symmetry; apply: hwlog; rewrite // bS.
+Qed.
+
 Definition injectiveb_finsfun_id : pred (finsfun (@id K)) :=
   [pred g | (injectiveb [ffun a : finsupp g => g (val a)])
             && [forall a : finsupp g, g (val a) \in finsupp g]].
 
 Lemma injectiveb_finsfunP (g : finsfun (@id K)) :
   reflect (injective g) (injectiveb_finsfun_id g).
-Proof. 
-rewrite /injectiveb_finsfun_id; apply: (iffP idP).
-  move=> /andP [/finsfun_injective_inP inj_g /forallP stable_g ] a b.
-  wlog /andP [ag bg] : a b / (a \in finsupp g) && (b \notin finsupp g) => [hwlog|].
-    case: (finsfunP g b); case: (finsfunP g a) => //; last by move=> *; exact: inj_g.
-      by move=> ag bg ga_eq_b; apply: hwlog; rewrite ?ag ?bg ?(finsfun_dflt bg).
-    by move=> ag bg ga_eq_b; symmetry; apply: hwlog; rewrite ?ag ?bg ?(finsfun_dflt ag).
-  rewrite (finsfun_dflt bg) => ga_eq_b; move: bg; rewrite -ga_eq_b.
-  by rewrite (stable_g (SeqSub ag)).
-
-move => g_inj; apply/andP; split.
-  by apply/injectiveP => a b; rewrite !ffunE => eq_ga_gb; apply/val_inj/g_inj.
-apply/forallP => a.
-by rewrite mem_finsupp (inj_eq g_inj) -mem_finsupp; apply/valP.
+Proof.
+have [H1 [H2 H3]]:= injective_finsfun_subproof g.
+rewrite /injectiveb_finsfun_id; apply: (iffP idP)=> [|].
+  by move=> /andP [/finsfun_injective_inP ? /forallP ?]; apply/H3/H2.
+by move=> /H1 [/finsfun_injective_inP ? /forallP ?]; apply/andP.
 Qed.
 
 Lemma injective_finsfunP (g : finsfun (@id K)) :
   injective g <->
   exists2 S : {fset K}, (finsupp g \fsubset S)
   & {in S &, injective g} /\ forall a : S, g (val a) \in S.
-Proof.
-split => [|[S [finsupp_subset_S [g_inj_in g_stable]]]].
-move => /injectiveb_finsfunP /andP [/finsfun_injective_inP g_inj_in /forallP].
-  by exists (finsupp g) => //; rewrite fsubsetAA.
-move=> a b.
-have [[aS|aNS] [bS|bNS]] := (boolP (a \in S), boolP (b \in S)); first 3 last.
-- by rewrite !finsfun_dflt // ?(contra (fsubsetP finsupp_subset_S _)).
-- exact: g_inj_in.
-- rewrite (finsfun_dflt (contra (fsubsetP finsupp_subset_S _) bNS)).
-  by move=> ga_eq_b; move: bNS; rewrite -ga_eq_b (g_stable (SeqSub aS)).
-rewrite (finsfun_dflt (contra (fsubsetP finsupp_subset_S _) aNS)).
-by move=> gb_eq_a; move: aNS; rewrite gb_eq_a (g_stable (SeqSub bS)).
-Qed.
+Proof. by have [H1 [H2 H3]]:= injective_finsfun_subproof g; split=> [/H1|]. Qed.
   
 End InjectiveFinSFun.
