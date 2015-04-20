@@ -234,14 +234,14 @@ Definition finperm_mul (π π' : finPerm) :=
 Notation "1" := finperm_one.
 Notation "π * π'" := (finperm_mul π π').
 Notation "π ^-1" := (finperm_inv π) : finperm_scope.
-Notation "π '|'" := (can_perm_of_finPerm π) 
+Notation "π ~" := (can_perm_of_finPerm π) 
   (at level 0) : finperm_scope.  
 
 Section FinPermTheory.
 
 Implicit Types (π : finPerm) (a : atom).
 
-Lemma can_inv π : π^-1| = π|^-1%g.
+Lemma can_inv π : π^-1~ = π~^-1%g.
 Proof.
 apply permP => a. rewrite perm_of_finPermE.
 apply val_inj => /=. rewrite finsfun_of_can_ffunE; first by apply: valP.
@@ -287,6 +287,72 @@ Lemma finperm_invVP : right_inverse finperm_one finperm_inv finperm_mul.
 Proof. move => π. by rewrite -(finperm_invP π^-1) finperm_invK. Qed.
 
 End FinPermTheory.
+
+Section Transpositions.
+
+Implicit Types (a b c : atom).
+
+Definition tffun a b  := [ffun x : [fset a;b] => if val x == a then b else a].
+
+Lemma tfinsfun_subproof a b (a_neq_b : a != b) : 
+  [forall k, tffun a b k != val k].
+Proof.
+apply/forallP => k. move: (valP k). 
+rewrite in_fset2 => /orP. case =>  [k_eq_a | k_eq_b]. 
+  by rewrite ffunE k_eq_a (eqP k_eq_a) eq_sym. 
+by rewrite ffunE (eqP k_eq_b) [b==a]eq_sym (negbTE a_neq_b).
+Qed.
+
+Definition tfinsfun a b (a_neq_b : a != b) := 
+  @finsfun_of_can_ffun _ _ (@id atom) _ _ (tfinsfun_subproof a_neq_b).
+
+Lemma inv_tfinsfun a b (a_neq_b : a != b) :
+  involutive (tfinsfun a_neq_b).
+Proof.
+move => c. case : (finsfunP _ c); first by move => *; rewrite finsfun_dflt.
+rewrite in_fset2 => /orP. case => /eqP ->.
+rewrite !finsfun_of_can_ffunE.
+  - exact: set21.
+  - move => *. by rewrite ffunE eq_refl set22. 
+  - exact: set21.
+  - move => *. by rewrite !ffunE /= ffunE /= eq_refl eq_sym (negbTE a_neq_b).
+rewrite !finsfun_of_can_ffunE.
+  - exact: set22.
+  - move => *. by rewrite ffunE /= eq_sym (negbTE a_neq_b) set21. 
+  - exact: set22.
+  - move => *. by rewrite !ffunE /= ffunE /= [b==a]eq_sym (negbTE a_neq_b) eq_refl.
+Qed.
+
+(* à factoriser *)
+
+Lemma inj_tfinsfun a b (a_neq_b : a != b) : 
+  injectiveb_finsfun_id (tfinsfun a_neq_b).
+Proof. by apply/injectiveb_finsfunP/inv_inj/inv_tfinsfun. Qed.
+
+Definition tfinperm a b (a_neq_b : a != b) :=
+  FinPerm (inj_tfinsfun a_neq_b).
+
+CoInductive tfinperm_spec a b c : atom -> Type :=
+  | TFinpermFirst : c = a -> tfinperm_spec a b c b
+  | TFinpermSecond : c = b -> tfinperm_spec a b c a
+  | TFinpermNone : (c != a) && (c != b) -> tfinperm_spec a b c c.
+
+Lemma tfinpermP a b c (a_neq_b : a != b) : 
+  tfinperm_spec a b c (tfinperm a_neq_b c).
+Proof.
+case: finsfunP; rewrite in_fset2. 
+  by rewrite negb_or; exact: TFinpermNone.
+move => cab; rewrite finsfun_of_can_ffunE.
+  case: (orP cab) => /eqP ->. exact: set21. exact: set22.
+move => *. rewrite ffunE /=.
+case ca : (c == a); first by apply/TFinpermFirst/(eqP ca).
+move: ca cab -> => /eqP ->. by apply TFinpermSecond.
+Qed.
+
+End Transpositions.
+
+
+
 
 Section NominalDef.
 
