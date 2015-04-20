@@ -447,8 +447,6 @@ Proof. by move => x; rewrite -actM (finperm_invP π) act1. Qed.
 Lemma actVK π : cancel (act π^-1) (act π).
 Proof. by move => x; rewrite -actM (finperm_invVP π) act1. Qed.
 
-End NominalTheory.
-
 Definition max (A : {fset atom}) := \max_(a : A) val a. 
 
 Definition fresh (A : {fset atom}) := (max A).+1.
@@ -531,3 +529,93 @@ by move=> Requi x; have [fn nh ef] := some_any Requi x; split=> [/nh|/ef].
 Qed.
 
 End SomeAny.
+
+Section NominalLambdaTerms.
+
+Inductive rawterm : Type :=
+| rVar of atom
+| rApp of rawterm & rawterm
+| rLambda of atom & rawterm.
+
+Fixpoint termact (π : finPerm) t :=
+  match t with
+    |rVar a => rVar (π a)
+    |rApp t1 t2 => rApp (termact π t1) (termact π t2)
+    |rLambda a t => rLambda (π a) (termact π t)
+  end.
+
+Fixpoint term_support t :=
+  match t with
+    |rVar a => [fset a]
+    |rApp t1 t2 => term_support t1 :|: term_support t2
+    |rLambda a t => a |: term_support t
+  end.
+
+Fixpoint fv t :=
+  match t with
+      |rVar a => [fset a]
+      |rApp t1 t2 => fv t1 :|: fv t2
+      |rLambda a t => fv t :\ a
+  end.
+
+Fixpoint rawterm_encode (t : rawterm) : GenTree.tree atom :=
+  match t with
+    | rVar a => GenTree.Leaf a
+    | rLambda a t => GenTree.Node a.+1 [:: rawterm_encode t]
+    | rApp t1 t2 => GenTree.Node 0 [:: rawterm_encode t1; rawterm_encode t2]
+  end.
+
+Fixpoint rawterm_decode (t : GenTree.tree nat) : rawterm :=
+  match t with
+    | GenTree.Leaf a => rVar a
+    | GenTree.Node a.+1 [:: u] => rLambda a (rawterm_decode u)
+    | GenTree.Node 0 [:: u; v] =>
+      rApp (rawterm_decode u) (rawterm_decode v)
+    | _ =>rVar 0
+  end.
+
+Lemma rawterm_codeK : cancel rawterm_encode rawterm_decode.
+Proof. by elim=> //= [? -> ? ->|? ? ->]. Qed.
+
+Definition rawterm_eqMixin := CanEqMixin rawterm_codeK.
+Canonical rawterm_eqType := EqType rawterm rawterm_eqMixin.
+Definition rawterm_choiceMixin := CanChoiceMixin rawterm_codeK.
+Canonical rawterm_choiceType := ChoiceType rawterm rawterm_choiceMixin.
+Definition rawterm_countMixin := CanCountMixin rawterm_codeK.
+Canonical rawterm_countType := CountType rawterm rawterm_countMixin.
+
+Lemma termact1 : termact 1 =1 id.
+Proof.
+elim => [a | t1 iht1 t2 iht2| a t iht]; 
+by rewrite /= ?finsfun1 ?iht1 ?iht2 ?iht.
+Qed.
+
+Lemma termactM π π' t : termact (π * π') t = termact π (termact π' t).
+Proof.
+elim: t => [a | t1 iht1 t2 iht2 | a t iht]; 
+by rewrite /= ?finsfunM ?iht1 ?iht2 ?iht.
+Qed.
+
+Lemma termactproper : forall t1 t2 π, t1 = t2 -> (termact π t1) = (termact π t2).
+Proof. by move => t1 t2 π ->. Qed.
+
+Definition term_nominal_setoid_mixin := 
+  @PermSetoidMixin rawterm (@eq rawterm) termact termact1 termactM termactproper.   
+
+
+Lemma termact_id (π : finPerm) t :
+     (forall a : atom, a \in term_support t -> π a = a) -> termact π t = t.
+Proof.
+elim: t => [a |t1 iht1 t2 iht2|a t iht] /= Hsupp.
+  - rewrite  Hsupp //. by rewrite in_fset1.
+  - rewrite ?iht1 ?iht2 // => a asuppt; 
+    rewrite ?Hsupp // in_fsetU asuppt ?orbT //.
+  - rewrite iht ?Hsupp // ?fset1U1 // => b bsuppt. by apply/Hsupp/fset1Ur.
+Qed.
+
+Definition term_nominal_mixin :=
+  @NominalMixin rawterm_choiceType term_nominal_setoid_mixin _ termact_id.
+
+Canonical term_nominalType := @NominalType rawterm_choiceType term_nominal_mixin.
+
+End NominalLambdaTerms.
