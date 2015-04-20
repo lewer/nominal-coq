@@ -1,4 +1,6 @@
 -R . Nominal
 theories/finmap.v
+theories/finsfun.v
+theories/quotlambda_new.v
 theories/quotlambda.v
 theories/bigenough.v

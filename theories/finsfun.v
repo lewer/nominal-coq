@@ -9,27 +9,34 @@ Import Prenex Implicits.
 Import Key.Exports.
 
 Delimit Scope finsfun_scope with fsfun.
-Local Open Scope finsfun_scope. 
+Local Open Scope finsfun_scope.
 Local Open Scope fset_scope.
 
 Section FinSFunDef.
 
-Variables (K:keyType) (V:eqType) (default : K -> V).
+Variables (K : keyType) (V : eqType) (default : K -> V).
 
 Record finsfun := FinSFun {
   fmap_of_finsfun : {fmap K -> V};
-  _ : [forall k:domf fmap_of_finsfun, fmap_of_finsfun k != default (val k)]
+  _ : [forall k : domf fmap_of_finsfun
+      , fmap_of_finsfun k != default (val k)]
 }.
 
 Definition finsfun_of (_ : phant (K -> V)) := finsfun.
 
-Fact finsfun_subproof (f : finsfun) : 
+Canonical finsfun_subType := Eval hnf in [subType for fmap_of_finsfun].
+Definition finsfun_eqMixin := [eqMixin of finsfun by <:].
+
+Fact finsfun_subproof (f : finsfun) :
   forall (k : K) (kf : k \in fmap_of_finsfun f), (fmap_of_finsfun f).[kf]%fmap != default k.
-Proof. case:f => f f_stable k kf /=. exact (forallP f_stable (SeqSub kf)). Qed.
+Proof.
+case:f => f f_stable k kf /=.
+exact: (forallP f_stable (SeqSub kf)).
+Qed.
 
 Definition fun_of_finsfun (f : finsfun) (k : K) :=
-  odflt (default k) (fmap_of_finsfun f).[? k]%fmap.     
-           
+  odflt (default k) (fmap_of_finsfun f).[? k]%fmap.
+
 Coercion fun_of_finsfun : finsfun >-> Funclass.
 
 Definition finsupp f := domf (fmap_of_finsfun f).
@@ -47,7 +54,7 @@ CoInductive finsfun_spec f (k : K) : V -> bool -> Type :=
   | FinsfunOut : k \notin finsupp f -> finsfun_spec f k (default k) false
   | FinsfunIn  (kf : k \in finsupp f) : finsfun_spec f k (f k) true.
 
-Lemma finsfunP f (k : K) : finsfun_spec f k (f k) (k \in finsupp f).
+Lemma finsuppP f (k : K) : finsfun_spec f k (f k) (k \in finsupp f).
 Proof.
 have [kf|kNf] := boolP (_ \in _); first by constructor.
 by rewrite finsfun_dflt // ; constructor.
@@ -58,38 +65,34 @@ Definition suppS := FSet [set a : S | h (val a) != default (val a)].
 Definition fmapS := FinMap [ffun a : suppS => h (val a)].
 
 Fact finsfunS_subproof : [forall k : suppS, fmapS k != default (val k)].
-Proof. apply/forallP => a /=. rewrite ffunE.
-by move: (ssvalP a) => /in_FSetE [ka /=]; rewrite in_set.
-Qed.
-
-Definition finsfun_of_fun :=
-  @FinSFun fmapS finsfunS_subproof.
-
-Lemma finsfun_of_funE : 
-  (forall a : K, h a != default a -> a \in S) -> (finsfun_of_fun) =1 h.  
 Proof.
-move => H a; symmetry.
-rewrite/finsfun_of_fun /fun_of_finsfun /=. case: fndP => /=.
-by move => kf; rewrite ffunE. 
-apply:contraNeq; move=> fa_neq_dflt.
-have /H a_in_S := fa_neq_dflt.
-by rewrite in_FSet inE /=.
+apply/forallP => a /=; rewrite ffunE.
+by move: (ssvalP a) => /FSetP [ka /=]; rewrite in_set.
 Qed.
 
+Definition finsfun_of_fun := @FinSFun fmapS finsfunS_subproof.
+
+Lemma finsfun_of_funE :
+  (forall a : K, h a != default a -> a \in S) -> (finsfun_of_fun) =1 h.
+Proof.
+move => H a; symmetry; rewrite /finsfun_of_fun /fun_of_finsfun.
+case: fndP => /= [kf|]; first by rewrite ffunE.
+by apply:contraNeq => /(fun x => (x,x)) [/H a_in_S]; rewrite in_FSet inE.
+Qed.
 
 (* Définition d'une finsfun à partir d'une ffun qui *)
 (* ne fixe aucun point de son domaine. On obtient *)
 (* une finsfun dont le support est définitionnellement *)
 (* égal au domaine de la finfun *)
- 
-Definition finsfun_of_can_ffun (T : {fset K}) (g : {ffun T -> V}) 
+
+Definition finsfun_of_can_ffun (T : {fset K}) (g : {ffun T -> V})
           (can_g : [forall k : T ,  g k != default (val k)]) :=
   @FinSFun (FinMap g) can_g.
 
-Lemma finsfun_of_can_ffunE (T : {fset K}) (g : {ffun T -> V}) 
-          (can_g : [forall k : T ,  g k != default (val k)]) 
+Lemma finsfun_of_can_ffunE (T : {fset K}) (g : {ffun T -> V})
+          (can_g : [forall k : T ,  g k != default (val k)])
           (k : K) (kg : k \in T) :
-  (finsfun_of_can_ffun can_g) k = g (SeqSub kg). 
+  (finsfun_of_can_ffun can_g) k = g (SeqSub kg).
 Proof. by rewrite/fun_of_finsfun in_fnd. Qed.
 
 Lemma finsfun_injective_inP  (f : finsfun) (T : {fset K}) :
@@ -103,13 +106,11 @@ Qed.
 
 End FinSFunDef.
 
-
-
 (* à mettre au bon endroit *)
-(* probablement inutile 
+(* probablement inutile
 Definition fun_of_ffun (S : {fset K}) (f : {ffun S -> V}) : K -> V :=
   fun k =>
-  if (k \in S =P true) is ReflectT k_in_S then f (SeqSub k_in_S) else (default k). 
+  if (k \in S =P true) is ReflectT k_in_S then f (SeqSub k_in_S) else (default k).
 
 Lemma in_fun_of_ffun (S : {fset K}) (f : {ffun S -> V}) (k : K) (kf : k \in S) :
   fun_of_ffun f k = f (SeqSub kf).
@@ -127,20 +128,15 @@ Proof. by move => kS; rewrite/fun_of_ffun; case:eqP => kS' //; rewrite kS' in kS
 Section FinSFunGeneralTheory.
 
 Variables (K : keyType) (V : eqType) (default : K -> V).
-Implicit Types (f g: finsfun default). 
+Implicit Types (f g: finsfun default).
 
-Lemma eq_finsfunP f g : f =1 g <-> f = g. 
+Lemma finsfunP f g : f =1 g -> f = g.
 Proof.
-split; last by move ->.
-case: f; case: g => g can_g f can_f ff_eq_fg. suff f_eq_g : f = g.
-  move:f_eq_g can_g can_f ff_eq_fg -> => can_g can_f _. congr FinSFun.
-  by apply bool_irrelevance.
-apply/fmapP=> k. case:fndP; case:fndP => //.
- - move => kg kf. congr Some. move:(ff_eq_fg k). by rewrite /fun_of_finsfun !in_fnd.
- - move => kNg kf. move : (ff_eq_fg k). rewrite/fun_of_finsfun in_fnd not_fnd //= => /eqP.
-   by rewrite (negbTE (forallP can_f (SeqSub kf))).
- - move => kg kNf. move : (ff_eq_fg k). rewrite/fun_of_finsfun not_fnd //= => /eqP.
-   by rewrite in_fnd /= eq_sym (negbTE (forallP can_g (SeqSub kg))).
+move=> eq_fg; apply/val_inj/fmapP => k.
+have := eq_fg k; rewrite /(f _) /(g _) /=.
+case: fndP; case: fndP => //= kf kg; first by move->.
+  by move/eqP/negPn; rewrite finsfun_subproof.
+by move/eqP/negPn; rewrite eq_sym finsfun_subproof.
 Qed.
 
 End FinSFunGeneralTheory.
@@ -152,9 +148,9 @@ Implicit Types (f g : finsfun (@id K)).
 
 (* Pour composer des finsfun arbitraires et avoir comp g f = g \o f *)
 (* Quelles conditions faut-il supposer sur défaut ? *)
-(* au moins default idempotent, peut-etre default k \in g -> k \in g *) 
+(* au moins default idempotent, peut-etre default k \in g -> k \in g *)
 
-Definition finsfun_comp g f := 
+Definition finsfun_comp g f :=
   @finsfun_of_fun _ _ id [fun k : K => g (f k)] (finsupp f :|: finsupp g).
 
 Notation "g * f" := (finsfun_comp g f) : finsfun_scope.
@@ -177,19 +173,21 @@ Proof. by apply/forallP => k; move: (ssvalP k); rewrite in_fset0. Qed.
 Definition finsfun_one := @finsfun_of_can_ffun _ _ (@id K) _ _ can_emptyffun.
 
 Lemma finsfun1 (k : K) : finsfun_one k = k.
-Proof. by case:finsfunP. Qed.
+Proof. by case: finsuppP. Qed.
 
 Lemma finsfun_oneP : left_id finsfun_one finsfun_comp.
-Proof. by move => f; apply/eq_finsfunP => a; rewrite finsfunM /= finsfun1. Qed. 
+Proof. by move => f; apply/finsfunP => a; rewrite finsfunM /= finsfun1. Qed.
 
 Lemma inj_finsfun_one : injective finsfun_one.
-Proof. move => a b. by rewrite !finsfun1. Qed.
+Proof. by move => a b; rewrite !finsfun1. Qed.
 
-Lemma finsfun_mulP : associative finsfun_comp.
-Proof. 
-move => f g h. apply/eq_finsfunP => k. by rewrite !finsfunM /= !finsfunM. Qed.
+Lemma finsfunA : associative finsfun_comp.
+Proof.
+move => f g h; apply/finsfunP => k.
+by rewrite !finsfunM /= !finsfunM.
+Qed.
 
-Lemma inj_finsfun_comp g f : injective f -> injective g -> 
+Lemma inj_finsfun_comp g f : injective f -> injective g ->
                              injective (g * f).
 Proof.
 move => f_inj g_inj k k'. rewrite !finsfunM => gfk_eq_gfk'.
@@ -249,5 +247,5 @@ Lemma injective_finsfunP (g : finsfun (@id K)) :
   exists2 S : {fset K}, (finsupp g \fsubset S)
   & {in S &, injective g} /\ forall a : S, g (val a) \in S.
 Proof. by have [H1 [H2 H3]]:= injective_finsfun_subproof g; split=> [/H1|]. Qed.
-  
+
 End InjectiveFinSFun.

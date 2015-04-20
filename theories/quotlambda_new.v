@@ -28,13 +28,13 @@ Lemma in_permsupp (π : finPerm) : {mono π : a / a \in finsupp π}.
 Proof. 
 move=> a; case: π => f /=.
 move=> /andP [/finsfun_injective_inP f_inj_in /forallP f_stable].
-by case: (finsfunP _ a) => [/negPf -> //|af]; apply: (f_stable (SeqSub af)).
+by case: (finsuppP _ a) => [/negPf -> //|af]; apply: (f_stable (SeqSub af)).
 Qed.
 
 Lemma perm_stable (π : finPerm) (S : {fset atom}) :
   finsupp π \fsubset S -> forall (a : atom), a \in S -> π a \in S. 
 Proof.
-move=> /fsubsetP S_surfinsupp a; case:finsfunP; first by []. 
+move=> /fsubsetP S_surfinsupp a; case:finsuppP; first by []. 
 by move => a_supp aS; apply/S_surfinsupp/(monoW (@in_permsupp _)).
 Qed.
 
@@ -59,7 +59,7 @@ case: π; case: π' => f f_inj g g_inj g_eq1_f.
 suff g_eq_f : g = f.
   move: g_eq_f f_inj g_inj g_eq1_f-> => f_inj g_inj _. congr FinPerm. 
   exact: bool_irrelevance.
-by apply eq_finsfunP.
+by apply/finsfunP.
 Qed.
 
 Lemma eq_finPerm_is_equiv : equiv_class_of eq_finPerm.
@@ -175,7 +175,7 @@ CoInductive finPerm_spec (π : finPerm) (a : atom) : atom -> bool -> Type :=
 
 Lemma finPermP (π : finPerm) (a : atom) : finPerm_spec π a (π a) (a \in finsupp π).
 Proof.
-case:finsfunP; first by exact: FinPermOut.
+case:finsuppP; first by exact: FinPermOut.
 move => aπ. suff: π a = (val (can_perm_of_finPerm π (SeqSub aπ))).
   by move ->; apply: FinPermIn.
 exact: finPerm_can.
@@ -309,7 +309,7 @@ Definition tfinsfun a b (a_neq_b : a != b) :=
 Lemma inv_tfinsfun a b (a_neq_b : a != b) :
   involutive (tfinsfun a_neq_b).
 Proof.
-move => c. case : (finsfunP _ c); first by move => *; rewrite finsfun_dflt.
+move => c. case : (finsuppP _ c); first by move => *; rewrite finsfun_dflt.
 rewrite in_fset2 => /orP. case => /eqP ->.
 rewrite !finsfun_of_can_ffunE.
   - exact: set21.
@@ -340,7 +340,7 @@ CoInductive tfinperm_spec a b c : atom -> Type :=
 Lemma tfinpermP a b c (a_neq_b : a != b) : 
   tfinperm_spec a b c (tfinperm a_neq_b c).
 Proof.
-case: finsfunP; rewrite in_fset2. 
+case: finsuppP; rewrite in_fset2. 
   by rewrite negb_or; exact: TFinpermNone.
 move => cab; rewrite finsfun_of_can_ffunE.
   case: (orP cab) => /eqP ->. exact: set21. exact: set22.
