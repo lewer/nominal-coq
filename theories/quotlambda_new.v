@@ -158,6 +158,8 @@ End PermFinPerm.
 
 *)
 
+End PermFinPerm.
+
 Section FinPermSpec.
 
 Lemma finPerm_can (π : finPerm) (a : atom) (aπ : a\in finsupp π) :
@@ -230,6 +232,8 @@ Proof. apply/injectiveb_finsfunP/inj_finsfun_comp; by apply finperm_inj. Qed.
 
 Definition finperm_mul (π π' : finPerm) :=
   FinPerm (finperm_mul_subproof π π').
+
+End FinPermMulDef.
 
 Notation "1" := finperm_one.
 Notation "π * π'" := (finperm_mul π π').
@@ -425,3 +429,5 @@ Proof. by move => x; rewrite -actM (finperm_invP π) act1. Qed.
 
 Lemma actVK π : cancel (act π^-1) (act π).
 Proof. by move => x; rewrite -actM (finperm_invVP π) act1. Qed.
+
+End NominalTheory.

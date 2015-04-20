@@ -181,7 +181,7 @@ Proof. by move => f; apply/finsfunP => a; rewrite finsfunM /= finsfun1. Qed.
 Lemma inj_finsfun_one : injective finsfun_one.
 Proof. by move => a b; rewrite !finsfun1. Qed.
 
-Lemma finsfunA : associative finsfun_comp.
+Lemma finsfun_compA : associative finsfun_comp.
 Proof.
 move => f g h; apply/finsfunP => k.
 by rewrite !finsfunM /= !finsfunM.
