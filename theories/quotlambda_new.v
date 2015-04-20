@@ -353,10 +353,15 @@ case ca : (c == a); first by apply/TFinpermFirst/(eqP ca).
 move: ca cab -> => /eqP ->. by apply TFinpermSecond.
 Qed.
 
+Lemma tfinpermL a a' (a_neq_a' : a != a') :
+  (tfinperm a_neq_a') a = a'.
+Proof. by case: tfinpermP => //; rewrite eqxx. Qed.
+
+Lemma tfinpermR a a' (a_neq_a' : a != a') :
+  (tfinperm a_neq_a') a' = a.
+Proof. by case: tfinpermP => //; rewrite eqxx => /andP [ ? ?]. Qed.
+
 End Transpositions.
-
-
-
 
 Section NominalDef.
 
@@ -371,12 +376,18 @@ Record perm_setoid_mixin (X : Type) (R : X -> X -> Prop) := PermSetoidMixin {
 
 Record nominal_mixin (X : choiceType) := NominalMixin {
   perm_setoid_of : @perm_setoid_mixin X (@eq X);
-  support : X -> {fset atom}; 
+  supp : X -> {fset atom}; 
   _ : forall π x, 
-        (forall a : atom, a \in support x -> π a = a) -> (act perm_setoid_of π x) = x
+        (forall a : atom, a \in supp x -> π a = a) -> (act perm_setoid_of π x) = x
 }.
-
                                     
+Record nominalType := NominalType {
+                           car :> choiceType;
+                           nominal_mix : nominal_mixin car }.
+
+Definition actN nt := act (perm_setoid_of (nominal_mix nt)).
+Definition support nt := supp (nominal_mix nt).
+
 End NominalDef.
 
 Section NominalAtoms.
@@ -401,28 +412,34 @@ Lemma atomact_id π a :
      (forall b, b \in fset1 a -> atomact π b = b) -> atomact π a = a.
 Proof. apply. by rewrite in_fset1. Qed.
 
-Definition atom_nominal_mixin :=
+Canonical atom_nominal_mixin :=
   @NominalMixin nat_choiceType atom_nominal_setoid_mixin _ atomact_id.
+
+Canonical atom_nominal_type :=
+  @NominalType nat_choiceType atom_nominal_mixin.
 
 End NominalAtoms.
 
+Notation "π \dot x" := (actN π x)
+                         (x at level 60, at level 60).
+Notation swap := tfinperm.
+
 Section NominalTheory.
 
-Variables (T : choiceType) (X : nominal_mixin T). 
-Implicit Types (π : finPerm) (x : T).
+Variables (X : nominalType).
+Implicit Types (π : finPerm) (x : X).
 
-Local Notation act π := (act (perm_setoid_of X) π ).
-Local Notation support := (support X).
+Local Notation act π := (@actN X π).
 
 Lemma act1 : act 1 =1 id.
-Proof. by case: X; case. Qed.
+Proof. by case: X => car; case; case. Qed.
 
-Lemma actM (π π' : finPerm) x : act (π * π') x = act π (act π' x).
-Proof. by case: X; case. Qed.
+Lemma actM (π1 π2 : finPerm) : forall x : X,  (π1 * π2) \dot x = π1 \dot (π2 \dot x).
+Proof. by case: X => car; case; case. Qed.
 
-Lemma act_id π x : (forall a : atom, a \in support x -> π a = a) 
+Lemma act_id π : forall x : X, (forall a : atom, a \in support x -> π a = a) 
                    -> (act π x) = x.
-Proof. case: X => ps supp. exact. Qed.
+Proof. case: X => car. case => ps supp. exact. Qed.
 
 Lemma actK π : cancel (act π) (act π^-1).
 Proof. by move => x; rewrite -actM (finperm_invP π) act1. Qed.
@@ -431,3 +448,86 @@ Lemma actVK π : cancel (act π^-1) (act π).
 Proof. by move => x; rewrite -actM (finperm_invVP π) act1. Qed.
 
 End NominalTheory.
+
+Definition max (A : {fset atom}) := \max_(a : A) val a. 
+
+Definition fresh (A : {fset atom}) := (max A).+1.
+
+Lemma fresh_notin A : fresh A \notin A.
+Proof.
+Admitted.
+
+Lemma fresh_subsetnotin (A B: {fset atom}) : A \fsubset B -> fresh B \notin A. 
+Proof.
+move => /fsubsetP AinclB. have: fresh B \notin B by exact: fresh_notin.
+by apply/contra/AinclB.
+Qed.
+
+Lemma fresh_transp (a a' : atom) (aa' : a != a') (x : X)
+      (a_fresh_x : a \notin support x) (a'_fresh_x : a' \notin support x) :
+  swap aa' \dot x = x.
+Proof.
+apply act_id => b bsuppx. case: tfinpermP => //= b_eq; rewrite b_eq in bsuppx. 
+  by rewrite bsuppx in a_fresh_x.
+by rewrite bsuppx in a'_fresh_x.
+Qed.
+
+Lemma neq_fresh (a a' : atom) (aa' : a != a') :
+  (a \notin support a') = (a != a').
+Proof. by rewrite in_fset1. Qed.
+
+Hint Resolve neq_fresh.
+
+End NominalTheory.
+
+Section SomeAny.
+
+Variable (X : nominalType).
+
+Definition new (P : atom -> Prop) :=
+  exists A : {fset atom}, forall a, a \notin A -> P a.
+
+Notation "\new a , P" := (new (fun a:atom => P))
+   (format "\new  a ,  P", at level 200).
+Notation "a # x" := (a \notin support x)
+                      (at level 0).
+
+Definition equivariant_set (R : atom -> X -> Prop) :=
+  forall (π : finPerm) a x, R (π \dot a) (π \dot x) <-> R a x. 
+
+Theorem some_any (R : atom -> X -> Prop) :
+  equivariant_set R ->
+  forall x : X, [/\
+      (forall a : atom , a # x -> R a x) -> (\new a, R a x),
+      (\new a, R a x) ->  (exists2 a, a # x & R a x) &
+      (exists2 a, a # x & R a x)
+      -> (forall a, a # x -> R a x)
+    ].
+Proof.
+move => Requi; split; first by exists (support x).
+  move => [S aNSR]. exists (fresh (support x :|: S)).
+    by apply/fresh_subsetnotin/fsubsetUl.
+  apply/aNSR/fresh_subsetnotin/fsubsetUr.
+move => [a a_fresh_x rax] a' a'_fresh_x.
+case: (eqVneq a a'); first by move <-.
+move => aa'. 
+rewrite -[a'](tfinpermL aa') -[x](fresh_transp aa') //. 
+by apply Requi.
+Qed.
+
+Lemma new_forall (R : atom -> X -> Prop) :
+  equivariant_set R ->
+  forall x : X, ((\new a, R a x) <-> (forall a, a # x -> R a x)).
+Proof.
+move=> Requi x. have [? ne ef] := some_any Requi x. 
+by split => // /ne /ef.
+Qed.
+
+Lemma new_exists  (R : atom -> X -> Prop) :
+  equivariant_set R -> 
+  forall x : X, ((\new a, R a x) <-> (exists2 a, a # x & R a x)).
+Proof.
+by move=> Requi x; have [fn nh ef] := some_any Requi x; split=> [/nh|/ef].
+Qed.
+
+End SomeAny.
