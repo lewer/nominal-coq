@@ -39,10 +39,9 @@ Reserved Notation "{fset K }" (at level 0, format "{fset  K }").
 Reserved Notation "x .[ k <- v ]"
   (at level 2, k at level 200, v at level 200, format "x .[ k  <-  v ]").
 Reserved Notation "x .[~ k ]" (at level 2, k at level 200, format "x .[~  k ]").
-Reserved Notation "x .[+ k ]" (at level 2, k at level 200, format "x .[+  k ]").
+Reserved Notation "x .[: k ]" (at level 2, k at level 200, format "x .[:  k ]").
+Reserved Notation "x .[\ k ]" (at level 2, k at level 200, format "x .[\  k ]").
 Reserved Notation "x .[? k ]" (at level 2, k at level 200, format "x .[?  k ]").
-Reserved Notation "x .[ k | v ]"
-  (at level 2, k at level 200, v at level 200, format "x .[ k  |  v ]").
 Reserved Infix ":~:" (at level 52).
 Reserved Notation "[ 'fset' k ]" (at level 0, k at level 99, format "[ 'fset'  k ]").
 
@@ -849,6 +848,11 @@ Proof. by apply/fsetP=> x; rewrite !in_fsetE; do ?case: (_ \in _). Qed.
 Lemma fsetDDr A B C : A :\: (B :\: C) = (A :\: B) :|: (A :&: C).
 Proof. by apply/fsetP=> x; rewrite !in_fsetE; do ?case: (_ \in _). Qed.
 
+Lemma fsetUDl (A B C : {fset K}) : A :|: (B :\: C) = (A :|: B) :\: (C :\: A).
+Proof. by apply/fsetP=> x; rewrite !in_fsetE; do ?case: (_ \in _). Qed.
+
+Lemma fsetUDr (A B C : {fset K}) : (A :\: B) :|: C = (A :|: C) :\: (B :\: C).
+Proof. by apply/fsetP=> x; rewrite !in_fsetE; do ?case: (_ \in _). Qed.
 
 (* other inclusions *)
 
@@ -1287,9 +1291,9 @@ move=> eq_fg; congr FinMap; apply/ffunP => /= x.
 by do [rewrite -!getfE; do ?exact: valP] => *.
 Qed.
 
-Lemma fmapP V (f g : {fmap K -> V}) : fnd f =1 fnd g -> f = g.
+Lemma fmapP V (f g : {fmap K -> V}) : fnd f =1 fnd g <-> f = g.
 Proof.
-move=> fnd_fg; apply: getfP => [|k kMf kMg].
+split=> [fnd_fg|-> //]; apply: getfP => [|k kMf kMg].
   by apply/fsetP => x; rewrite -!fndSome fnd_fg.
 by apply: Some_inj; rewrite -!in_fnd.
 Qed.
@@ -1343,7 +1347,7 @@ End MapTheory.
 
 Section Ops2.
 
-Variable K : keyType.
+Variable (K : keyType).
 
 Lemma reducef_subproof V (f : {fmap K -> option V})
       (X := FSet [set x : domf f | f x])
@@ -1360,12 +1364,15 @@ Definition filterf V (f : {fmap K -> V}) (P : pred K) :=
   reducef (FinMap [ffun x : domf f =>
                    if P (val x) then Some (f x) else None]).
 
-Definition remf V (f : {fmap K -> V}) k := filterf f (predC1 k).
+Definition restrictf V (f : {fmap K -> V}) (A : {fset K}) :=
+  filterf f (mem A).
 
 Arguments reducef : simpl never.
 Arguments filterf : simpl never.
-Arguments remf : simpl never.
-Notation "x .[~ k ]" := (remf x k) : fmap_scope.
+Arguments restrictf : simpl never.
+Notation "x .[: A ]" := (restrictf x A) : fmap_scope.
+Notation "x .[\ A ]" := (x.[: domf x :\: A]) : fmap_scope.
+Notation "x .[~ k ]" := (x.[\ [fset k]]) : fmap_scope.
 
 Lemma domf_reduce V (f : {fmap K -> option V}) :
  domf (reducef f) = FSet [set k : domf f | f k].
@@ -1396,16 +1403,26 @@ Lemma domf_filterf V (f : {fmap K -> option V}) (P : pred K) :
  domf (filterf f P) = FSet [set k : domf f | P (val k)].
 Proof. by apply/fsetP => k; rewrite mem_filterf in_FSet_set. Qed.
 
-Lemma mem_remf V (f : {fmap K -> V}) (k k' : K) :
-   k \in f.[~ k'] = (k != k') && (k \in f) :> bool.
+Lemma mem_restrictf V (f : {fmap K -> V}) (A : {fset K}) (k : K) :
+   k \in f.[: A] = (k \in A) && (k \in f) :> bool.
 Proof. by rewrite mem_filterf andbC. Qed.
 
-Lemma domf_rem V (f : {fmap K -> V}) (k : K) :
-  domf f.[~ k] = domf f :\ k.
-Proof. by apply/fsetP=> k'; rewrite mem_remf !in_fsetE. Qed.
+Lemma mem_remf V (f : {fmap K -> V}) (A : {fset K}) (k : K) :
+   k \in f.[\ A] = (k \notin A) && (k \in f) :> bool.
+Proof. by rewrite mem_restrictf in_fsetE -andbA andbb. Qed.
+
+Lemma mem_remf1 V (f : {fmap K -> V}) (k' k : K) :
+   k \in f.[~ k'] = (k != k') && (k \in f) :> bool.
+Proof. by rewrite mem_remf in_fsetE. Qed.
+
+Lemma domf_restrict V (f : {fmap K -> V}) A : domf f.[: A] = A :&: domf f.
+Proof. by apply/fsetP=> k'; rewrite mem_restrictf !in_fsetE. Qed.
+
+Lemma domf_rem V (f : {fmap K -> V}) A : domf f.[\ A] = domf f :\: A.
+Proof. by rewrite domf_restrict fsetIDAC fsetIid. Qed.
 
 Lemma mem_remfF V (f : {fmap K -> V}) (k : K) : k \in f.[~ k] = false.
-Proof. by rewrite mem_remf eqxx. Qed.
+Proof. by rewrite mem_remf1 eqxx. Qed.
 
 Lemma fnd_reducef  V (f : {fmap K -> option V}) k :
   (reducef f).[? k] = ojoin f.[? k].
@@ -1435,52 +1452,114 @@ apply: Some_inj; rewrite get_reducef ffunE /=; case: ifPn => //.
 by move: kff; rewrite mem_filterf => /andP [? ->].
 Qed.
 
-Lemma fnd_rem V (f : {fmap K -> V}) (k k' : K) :
-  f.[~ k].[? k'] = if k' != k then f.[? k'] else None.
+Lemma fnd_restrict V (f : {fmap K -> V}) A (k : K) :
+  f.[: A].[? k] = if k \in A then f.[? k] else None.
 Proof. by rewrite fnd_filterf. Qed.
 
-Lemma getf_rem V (f : {fmap K -> V}) (k k' : K)
-      (k'f : k' \in f) (k'fk : k' \in f.[~ k]) :
-      f.[~ k].[k'fk] = f.[k'f].
+Lemma fnd_rem V (f : {fmap K -> V}) A (k : K) :
+  f.[\ A].[? k] = if k \in A then None else f.[? k].
+Proof.
+rewrite fnd_restrict in_fsetE.
+by case: fndP => ?; rewrite ?(andbT, andbF) //=; case: (_ \in _).
+Qed.
+
+Lemma restrictf_comp V (f : {fmap K -> V}) A B :
+  f.[: A].[: B] = f.[: A :&: B].
+Proof.
+by apply/fmapP=> k; rewrite !fnd_restrict !in_fsetE; do !case: (_ \in _).
+Qed.
+
+Lemma remf_comp V (f : {fmap K -> V}) A B :
+  f.[\ A].[\ B] = f.[\ A :|: B].
+Proof. by apply/fmapP=> k; rewrite !fnd_rem in_fsetE; do !case: (_ \in _). Qed.
+
+Lemma restrictfT V (f : {fmap K -> V}) : f.[: domf f] = f.
+Proof. by apply/fmapP=> k; rewrite fnd_restrict; case: fndP. Qed.
+
+Lemma restrictf0 V (f : {fmap K -> V}) : f.[: fset0] = nilf.
+Proof. by apply/fmapP => k; rewrite fnd_restrict in_fsetE not_fnd. Qed.
+
+Lemma remf0 V (f : {fmap K -> V}) : f.[\ fset0] = f.
+Proof. by rewrite fsetD0 restrictfT. Qed.
+
+Lemma fnd_rem1 V (f : {fmap K -> V}) (k k' : K) :
+  f.[~ k].[? k'] = if k' != k then f.[? k'] else None.
+Proof. by rewrite fnd_rem in_fsetE; case: eqP. Qed.
+
+Lemma getf_restrict V (f : {fmap K -> V}) A (k : K)
+      (kf : k \in f) (kfA : k \in f.[: A]) :
+      f.[: A].[kfA] = f.[kf].
 Proof. by rewrite get_filterf. Qed.
 
-Lemma setf_rem V (f : {fmap K -> V}) (k : K) (v : V) :
+Lemma setf_restrict V (f : {fmap K -> V}) A (k : K) (v : V) :
+  f.[: A].[k <- v] = f.[k <- v].[: k |: A].
+Proof.
+by apply/fmapP=> k'; rewrite !(fnd_set, fnd_restrict, in_fsetE); case: eqP.
+Qed.
+
+Lemma setf_rem V (f : {fmap K -> V}) A (k : K) (v : V) :
+  f.[\ A].[k <- v] = f.[k <- v].[\ (A :\ k)].
+Proof. by rewrite setf_restrict fsetUDl. Qed.
+
+Lemma setf_rem1 V (f : {fmap K -> V}) (k : K) (v : V) :
   f.[~ k].[k <- v] = f.[k <- v].
-Proof. by apply/fmapP => k'; rewrite !fnd_set fun_if fnd_rem; case: eqP. Qed.
+Proof. by rewrite setf_rem fsetDv remf0. Qed.
 
 Lemma setfC V (f : {fmap K -> V}) k1 k2 v1 v2 :
    f.[k1 <- v1].[k2 <- v2] =
    if k2 == k1 then f.[k2 <- v2] else f.[k2 <- v2].[k1 <- v1].
 Proof.
-apply: fmapP => k; rewrite (fun_if (fnd^~ k)) !fnd_set.
+apply/fmapP => k; rewrite (fun_if (fnd^~ k)) !fnd_set.
 have [[->|kNk2] [// <-|k2Nk1]] // := (altP (k =P k2), altP (k2 =P k1)).
 by rewrite (negPf kNk2).
 Qed.
 
-Lemma remf_id V (f : {fmap K -> V}) k : k \notin f -> f.[~ k] = f.
+Lemma restrictf_mkdom V (f : {fmap K -> V}) A : f.[: A] = f.[: domf f :&: A].
 Proof.
-move=> kf; apply: fmapP => k'; rewrite fnd_rem.
-by case: eqP => // ->; rewrite not_fnd.
+apply/fmapP=> k; rewrite !fnd_restrict in_fsetE.
+by case: fndP => ?; rewrite ?(andbT, andbF) //=; case: (_ \in _).
 Qed.
 
-Lemma remf_set V (f : {fmap K -> V}) (k k' : K) (v : V) :
-  f.[k' <- v].[~ k] = if k == k' then f.[~ k] else f.[~ k].[k' <- v].
+Lemma restrictf_id V (f : {fmap K -> V}) A :
+  [disjoint domf f & A] -> f.[: A] = nilf.
+Proof. by move=> dAf; rewrite restrictf_mkdom (eqP dAf) restrictf0. Qed.
+
+Lemma remf_id V (f : {fmap K -> V}) A : [disjoint domf f & A] -> f.[\ A] = f.
+Proof. by move=> /fsetDidPl ->; rewrite restrictfT. Qed.
+
+Lemma remf1_id V (f : {fmap K -> V}) k : k \notin f -> f.[~ k] = f.
+Proof. by move=> kNf; rewrite remf_id //= fdisjointX1. Qed.
+
+Lemma restrictf_set V (f : {fmap K -> V}) A (k : K) (v : V) :
+  f.[k <- v].[: A] = if k \in A then f.[: A].[k <- v] else f.[: A].
 Proof.
-apply: fmapP => k'' /=; have [->|Nk12] := altP eqP.
-  by rewrite !fnd_rem fnd_set; case: eqP.
-by rewrite !(fnd_rem, fnd_set); have [->|//] := altP eqP; rewrite (negPf Nk12).
+apply/fmapP => k' /=; rewrite (fun_if (fnd^~ _)) !(fnd_restrict, fnd_set).
+by case: eqP => [->|]; do !case: ifP.
 Qed.
+
+Lemma remf_set V (f : {fmap K -> V}) A (k : K) (v : V) :
+  f.[k <- v].[\ A] = if k \in A then f.[\ A] else f.[\ A].[k <- v].
+Proof.
+apply/fmapP => k' /=; rewrite (fun_if (fnd^~ _)) !(fnd_rem, fnd_set).
+by case: eqP => [->|]; do !case: ifP.
+Qed.
+
+Lemma remf1_set V (f : {fmap K -> V}) (k k' : K) (v : V) :
+  f.[k' <- v].[~ k] = if k == k' then f.[~ k] else f.[~ k].[k' <- v].
+Proof. by rewrite remf_set in_fsetE eq_sym. Qed.
 
 Lemma setf_inj V (f f' : {fmap K -> V}) k v :
   k \notin f -> k \notin f' -> f.[k <- v] = f'.[k <- v]-> f = f'.
 Proof.
-move=> kf kf' eq_fkv; apply: fmapP => k'; have := congr1 (fnd^~ k') eq_fkv.
+move=> kf kf' eq_fkv; apply/fmapP => k'; have := congr1 (fnd^~ k') eq_fkv.
 by rewrite !fnd_set; case: eqP => // ->; rewrite !not_fnd.
 Qed.
 
 End Ops2.
 
-Notation "x .[~ k ]" := (remf x k) : fmap_scope.
+Notation "x .[: A ]" := (restrictf x A) : fmap_scope.
+Notation "x .[\ A ]" := (x.[: domf x :\: A]) : fmap_scope.
+Notation "x .[~ k ]" := (x.[\ [fset k]]) : fmap_scope.
 
 (* (***********************) *)
 (* (* Porting in progress *) *)
@@ -1516,6 +1595,9 @@ rewrite /catf /=; case: fndP => //= [kfg|].
 by rewrite mem_catf => /norP [kNf kNg]; rewrite !not_fnd // if_same.
 Qed.
 
+Lemma catfE f g : f + g = f.[\ domf g] + g.
+Proof. by apply/fmapP=> k; rewrite !(fnd_cat, fnd_rem); case: ifP. Qed.
+
 Lemma getf_catl f g k (kfg : k \in domf (f + g))
       (kf : k \in domf f) : k \notin domf g -> (f + g).[kfg] = f.[kf].
 Proof.
@@ -1535,7 +1617,7 @@ by apply/fmapP => k; rewrite fnd_cat; case: ifPn => //= ?; rewrite !not_fnd.
 Qed.
 
 Lemma catf_setl f g k (v : V) :
-  catf f.[k <- v] g = if k \in g then catf f g else (catf f g).[k <- v].
+  f.[k <- v] + g = if k \in g then f + g else (f + g).[k <- v].
 Proof. (* :BUG: rewrite [fnd ^~ k']fun_if does not work *)
 apply/fmapP=> k'; rewrite (fun_if (fnd ^~ k')) !(fnd_cat, fnd_set).
 by have [->|Nkk'] := altP eqP; do !case: (_ \in _).
@@ -1547,16 +1629,38 @@ apply/fmapP=> k'; rewrite !(fnd_cat, fnd_set, mem_setf, inE).
 by have [->|Nkk'] := altP eqP; do !case: (_ \in _).
 Qed.
 
-Lemma remf_cat f g k : (f + g).[~ k] = f.[~ k] + g.[~ k].
+Lemma restrictf_cat f g A : (f + g).[: A] = f.[: A] + g.[: A].
 Proof.
-apply/fmapP => k'; rewrite !(fnd_cat, fnd_rem) mem_remf.
-by have [->|?] := altP eqP; do !case: (_ \in _).
+apply/fmapP => k'; rewrite !(fnd_cat, fnd_restrict) mem_restrictf.
+by case: (_ \in _).
 Qed.
 
-Lemma catf_reml k f g :
+Lemma restrictf_cat_domr f g : (f + g).[: domf g] = g.
+Proof.
+rewrite catfE restrictf_cat restrictf_comp.
+by rewrite fsetIDAC fsetDIl fsetDv fsetI0 restrictf0 restrictfT cat0f.
+Qed.
+
+Lemma remf_cat f g A : (f + g).[\ A] = f.[\ A] + g.[\ A].
+Proof.
+by apply/fmapP => k'; rewrite !(fnd_cat, fnd_rem) mem_remf; case: (_ \in _).
+Qed.
+
+Lemma catf_restrictl A f g : f.[: A] + g = (f + g).[: A :|: domf g].
+Proof.
+apply/fmapP=> k; rewrite !(fnd_cat, fnd_restrict) !in_fsetE.
+by do !case: (_ \in _).
+Qed.
+
+Lemma catf_reml A f g : f.[\ A] + g = (f + g).[\ A :\: domf g].
+Proof.
+by apply/fmapP=> k; rewrite !(fnd_cat, fnd_rem) in_fsetE; case: (_ \in _).
+Qed.
+
+Lemma catf_rem1l k f g :
   f.[~ k] + g = if k \in g then f + g else (f + g).[~ k].
 Proof.
-apply/fmapP => k'; rewrite (fun_if (fnd ^~ k')) !(fnd_cat, fnd_rem).
+apply/fmapP => k'; rewrite (fun_if (fnd ^~ k')) !(fnd_cat, fnd_rem1).
 by have [->|?] := altP eqP; do !case: (_ \in _).
 Qed.
 
@@ -1564,122 +1668,65 @@ Lemma setf_catr f g k (v : V) : (f + g).[k <- v] = f + g.[k <- v].
 Proof. by rewrite catf_setr. Qed.
 
 Lemma setf_catl f g k (v : V) : (f + g).[k <- v] = f.[k <- v] + g.[~ k].
-Proof. by rewrite catf_setl mem_remf eqxx /= !setf_catr setf_rem. Qed.
+Proof. by rewrite catf_setl mem_remf1 eqxx /= !setf_catr setf_rem1. Qed.
 
 Lemma catfA f g h : f + (g + h) = f + g + h.
 Proof.
 by apply/fmapP => k; rewrite !fnd_cat !mem_catf; do !case: (_ \in _).
 Qed.
 
-Lemma catfC f g : [disjoint domf f & domf g] -> f + g = g + f.
+Lemma catfC f g : f + g = g + f.[\ domf g].
 Proof.
-move=> dfg; apply/fmapP=> k; rewrite !fnd_cat.
-have [kg|kNg] := ifPn; first by rewrite (negPf (fdisjointP_sym dfg _ kg)).
-by have [//|kNf] := ifPn; rewrite !not_fnd.
+apply/fmapP=> k; rewrite !fnd_cat domf_rem in_fsetE /= fnd_rem.
+by have [|kNg] //= := boolP (_ \in domf g); rewrite (not_fnd kNg); case: fndP.
 Qed.
 
-Lemma catfAC f g h : [disjoint domf g & domf h]%fmap ->
-     f + g + h = f + h + g.
-Proof. by move=> dfg; rewrite -!catfA [X in _ + X]catfC. Qed.
+Lemma disjoint_catfC f g : [disjoint domf f & domf g] -> f + g = g + f.
+Proof. by move=> dfg; rewrite catfC remf_id. Qed.
 
-Lemma catfCA f g h : [disjoint domf f & domf g]%fmap ->
+Lemma catfAC f g h : f + g + h = f + h + g.[\ domf h].
+Proof. by rewrite -!catfA [X in _ + X]catfC. Qed.
+
+Lemma disjoint_catfAC f g h : [disjoint domf g & domf h]%fmap ->
+     f + g + h = f + h + g.
+Proof. by move=> dgh; rewrite catfAC remf_id. Qed.
+
+Lemma catfCA f g h : f + (g + h) = g + (f.[\ domf g] + h).
+Proof. by rewrite !catfA [X in X + _]catfC. Qed.
+
+Lemma disjoint_catfCA f g h : [disjoint domf f & domf g]%fmap ->
      f + (g + h) = g + (f + h).
-Proof. by move=> dfg; rewrite !catfA [X in X + _]catfC. Qed.
+Proof. by move=> dfg; rewrite catfCA remf_id. Qed.
+
+Lemma catfIs f g h : f + h = g + h -> f.[\ domf h] = g.[\ domf h].
+Proof.
+move=> /fmapP eq_fg_fh; apply/fmapP => k; have := eq_fg_fh k.
+by rewrite !fnd_cat !fnd_rem; case: ifP.
+Qed.
+
+Lemma disjoint_catfIs h f g :
+  [disjoint domf f & domf h] -> [disjoint domf g & domf h] ->
+  f + h = g + h -> f = g.
+Proof. by move=> dfg dgh /catfIs; rewrite !remf_id. Qed.
+
+Lemma restrict_catfsI f g h : f + g = f + h -> g.[: domf h] = h.[: domf g].
+Proof.
+move=> /fmapP eq_fg_fh; apply/fmapP => k; have := eq_fg_fh k.
+rewrite !fnd_cat !fnd_restrict.
+by do ![case: (boolP (_ \in _)) => ? //=] => _; rewrite not_fnd.
+Qed.
+
+Lemma disjoint_catfsI h f g :
+  [disjoint domf f & domf h] -> [disjoint domf g & domf h] ->
+  h + f = h + g -> f = g.
+Proof.
+move=> dfg dgh; rewrite -disjoint_catfC // -[RHS]disjoint_catfC //.
+by apply: disjoint_catfIs.
+Qed.
 
 End Cat.
 
-(* Lemma catfsK (s s1 s2 : finmap) : *)
-(*   disjf s1 s && disjf s2 s -> catf s1 s = catf s2 s -> s1 = s2. *)(* Proof. *)
-(* move=> /andP[ds1s ds2s] eq_s12s; apply: fndP => k. *)
-(* move: eq_s12s => /(congr1 (fnd^~ k)); rewrite !fnd_cat. *)
-(* by case: ifP => // ks _; rewrite !fnd_default ?(disjfPl ds1s) ?(disjfPl ds2s). *)
-(* Qed. *)
-
-(* Lemma catfKs (s s1 s2 : finmap) : *)
-(*   disjf s s1 && disjf s s2 -> catf s s1 = catf s s2 -> s1 = s2. *)
-(* Proof. *)
-(* move=> /andP [??]; rewrite !(@catfC s) //. *)
-(* by move => /catfsK -> //; apply/andP; split; rewrite disjfC. *)
-(* Qed. *)
-
-(* End DisjointUnion. *)
-
-(* Section EqType. *)
-(* Variables (K : keyType) (V : eqType). *)
-
-(* Definition feq (s1 s2 : {fmap K -> V}) := seq_of s1 == seq_of s2. *)
-
-(* Lemma feqP : Equality.axiom feq. *)
-(* Proof. *)
-(* move=> s1 s2; rewrite /feq; apply: (iffP eqP) => [|->//]. *)
-(* move: s1 s2 => [s1 Hs1] [s2 Hs2] //= eq_s12. *)
-(* by case: _ / eq_s12 in Hs2 *; rewrite [Hs1]bool_irrelevance. *)
-(* Qed. *)
-
-(* Canonical Structure finmap_eqMixin := EqMixin feqP. *)
-(* Canonical Structure finmap_eqType := EqType {fmap K -> V} finmap_eqMixin. *)
-(* End EqType. *)
-
-
-(* Definition fmap_encode V (f : {fmap K -> V}) : *)
-(*   {ks : seq K & {ffun seq_sub ks -> V}} := *)
-(*   Tagged (fun ks => {ffun seq_sub ks -> V}) (ffun_of_fmap f). *)
-
-(* Definition fmap_decode V (f : {ks : seq K & {ffun seq_sub ks -> V}}) : *)
-(*   {fmap K -> V} := [fmap k kf in tag f => tagged f (SeqSub kf)]. *)
-
-(* Lemma fmap_encodeK V : cancel (@fmap_encode V) (@fmap_decode V). *)
-(* Proof. *)
-(* rewrite /fmap_decode => f; apply/fndP => k //=. *)
-(* Admitted. *)
-
-(* Definition finMapEqMixin (V : eqType) := CanEqMixin (@fmap_encodeK V). *)
-(* Canonical  finMapEqType  (V : eqType) := *)
-(*   EqType ({fmap K -> V}) (@finMapEqMixin V). *)
-(* Delimit Scope fmap_scope with fset. *)
-(* Open Scope fmap_scope. *)
-
-(* Notation "[ 'fmap' ]" := nilf : fmap_scope. *)
-(* Infix "+" := catf : fmap_scope. *)
-(* Infix ":~:" := disjf : fmap_scope. *)
-
-(* Section FSet. *)
-(* Variables (K : keyType). *)
-(* Implicit Type s : seq K. *)
-
-(* Definition fset s : {fset K} := fmap s (fun=> tt). *)
-(* Notation "u .[+ k ]" := (u.[k <- tt]) : fmap_scope. *)
-(* Notation "[ 'fset' k ]" := (fset [::k]) : fmap_scope. *)
-
-(* Lemma mem_fset (u : {fset K}) i : (i \in u) = (fnd u i == Some tt). *)
-(* Proof. *)
-(* by have [/is_fnd [] [->] //|iNu] := boolP (_ \in _); rewrite fnd_default. *)
-(* Qed. *)
-
-(* Lemma mem_fsetP (u : {fset K}) i : reflect (fnd u i = Some tt) (i \in u). *)
-(* Proof. by rewrite mem_fset; apply: eqP. Qed. *)
-
-(* Lemma fsetP (u v : {fset K}) : u =i v <-> u = v. *)
-(* Proof. *)
-(* split => [eq_uv|->//]; apply/fndP => i. *)
-(* have := eq_uv i; have [iv iu|iNv iNu] := boolP (i \in v). *)
-(*   by rewrite !(mem_fsetP _ _ _). *)
-(* by rewrite !fnd_default ?iNv ?iNu. *)
-(* Qed. *)
-
-(* Lemma fset_rem s k : uniq s -> fset (rem k s) = remf k (fset s). *)
-(* Proof. *)
-(* by move=> s_uniq; apply/fsetP => i; rewrite ?(mem_fmap, mem_remf) mem_rem_uniq. *)
-(* Qed. *)
-
-(* Lemma catf1 u k : u + [fset k] = u.[+ k]. *)
-(* Proof. *)
-(* apply/fsetP=> i. *)
-(* by rewrite mem_catf mem_fmap in_cons in_nil orbF mem_setf orbC. *)
-
-
-(* End FSet. *)
-
+Notation "f + g" := (catf f g) : fset_scope.
 
 Section FinMapEqType.
 
@@ -1697,4 +1744,3 @@ Definition finMap_eqMixin := CanEqMixin finMap_codeK.
 Canonical finMap_eqType := EqType {fmap K -> V} finMap_eqMixin.
 
 End FinMapEqType.
-
