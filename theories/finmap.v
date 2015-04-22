@@ -9,26 +9,78 @@
 Require Import ssreflect ssrbool ssrnat eqtype choice ssrfun seq path.
 Require Import fintype finfun bigop finset.
 
-(****************************************************************************)
-(* This file provides a representation of finitely supported maps where     *)
-(* the keys K lie in an ordType and the values V in an arbitrary type.      *)
-(*                                                                          *)
-(*        {fset K} == finite sets of elements of K                          *)
-(*           fset0 == the empty finite set                                  *)
-(*        [fset k] == the singleton finite set {k}                          *)
-(*                                                                          *)
-(*   {fmap K -> V} == finitely supported maps from K to V.                  *)
-(*          domf f == finite set ({fset K}) of keys of f                    *)
-(*         k \in f == k is a key of f                                       *)
-(*          [fmap] == the empty finite map                                  *)
-(*      f.[k <- v] == f extended with the mapping k -> v                    *)
-(*          f.[~k] == f where the key k has been removed                    *)
-(*           f.[p] == returns v if p is a proof of k \in f, and k maps to v *)
-(*          f.[?k] == returns Some v if k maps to v, otherwise None         *)
-(*          f ++ g == concatenation of f and g,                             *)
-(*                    the keys of g override those of f                     *)
-(*                                                                          *)
-(****************************************************************************)
+(*****************************************************************************)
+(* This file provides a representation of finitely supported maps where      *)
+(* the keys K lie in an ordType and the values V in an arbitrary type.       *)
+(*                                                                           *)
+(*         {fset K} == finite sets of elements of K                          *)
+(*    {fmap K -> V} == finitely supported maps from K to V.                  *)
+(*                                                                           *)
+(* In the remainder, A and B are of type {fset K}.                           *)
+(* because of the coercion for {fset K} to Type, writing a : A makes sense   *)
+(*                                                                           *)
+(*            fset0 == the empty finite set                                  *)
+(*         [fset k] == the singleton finite set {k}                          *)
+(*          A :&: B == the intersection of A and B                           *)
+(*          A :|: B == the union of A and B                                  *)
+(*           a |: B == the union of singleton a and B                        *)
+(*          A :\: B == the complement of B in A                              *)
+(*           A :\ b == A without b                                           *)
+(* [disjoint A & B] := A :&: B == 0                                          *)
+(*     A \fsubset B == A is a subset of B                                    *)
+(*     A \fproper B == A is a proper subset of B                             *)
+(*           FSet X == turns X : {set A} into an {fset K}                    *)
+(*    fincl AsubB a == turns a : A  into an element of B                     *)
+(*                     using a proof AsubB of A \fsubset B                   *)
+(*         fsub B A == turns A : {fset K} into a {set B}                     *)
+(*           f @: A == the image set of the collective predicate A by f.     *)
+(*      f @2:(A, B) == the image set of A x B by the binary function f.      *)
+(*                                                                           *)
+(*    [fset x : X | P] == the set of all x in X such that P is true          *)
+(*                        where P is a predicate on X                        *)
+(*  [fset x : X | P & Q] := [set x : X | P && Q].                            *)
+(* [fset x : K in A | P] == the set containing the x in A such that P is true*)
+(*                      this type P is a predicate on K                      *)
+(* [fset x : K in A | P & Q ] :=  [set x : K in A | P && Q].                 *)
+(* [fset x in A | P]     :=   [set x : _ in A | P].                          *)
+(* [fset x in A | P & Q ] :=  [set x : _ in A | P & Q].                      *)
+(*                                                                           *)
+(*                                                                           *)
+(* [fset E | x in A] == the set of all the values of the expression E, for x *)
+(*                     drawn from the collective predicate A.                *)
+(* [fset E | x in A & P] == the set of values of E for x drawn from A, such  *)
+(*                     that P is true.                                       *)
+(* [fset E | x in A, y in B] == the set of values of E for x drawn from A and*)
+(*                     and y drawn from B; B may depend on x.                *)
+(* [fset E | x : T] == the set of all values of E, with x in type T.         *)
+(* [fset E | x : T & P] == the set of values of E for x : T s.t. P is true.  *)
+(* [fset E | x : T, y : U in B], [fset E | x : T, y : U in B & P],           *)
+(* [fset E | x : T, y : U], [fset E | x : T, y : U & P]                      *)
+(*            == type-ranging versions of the binary comprehensions.         *)
+(*  [fset E | x : T in A], [fset E | x in A, y], [fset E | x, y & P], etc.   *)
+(*            == typed and untyped variants of the comprehensions above.     *)
+(*               The types may be required as type inference processes E     *)
+(*               before considering A or B. Note that type casts in the      *)
+(*               binary comprehension must either be both present or absent  *)
+(*               and that there are no untyped variants for single-type      *)
+(*               comprehension as Coq parsing confuses [x | P] and [E | x].  *)
+(*                                                                           *)
+(* Operations on finmaps                                                     *)
+(*                                                                           *)
+(*           domf f == finite set (of type {fset K}) of keys of f            *)
+(*          k \in f == k is a key of f                                       *)
+(*           [fmap] == the empty finite map                                  *)
+(*       f.[k <- v] == f extended with the mapping k -> v                    *)
+(*          f.[: A] == f restricted to A (intersected with domf f)           *)
+(*          f.[\ A] == f.[: domf :\: A]                                      *)
+(*                  := f where all the keys in A have been removed           *)
+(*          f.[~ k] := f.[\ [fset k]                                         *)
+(*            f.[p] == returns v if p is a proof of k \in f, and k maps to v *)
+(*          f.[? k] == returns Some v if k maps to v, otherwise None         *)
+(*            f + g == concatenation of f and g,                             *)
+(*                     the keys of g override the keys of f                  *)
+(*                                                                           *)
+(*****************************************************************************)
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -305,16 +357,24 @@ Definition fset1 a : {fset K} := fset [:: a].
 
 Definition fsetU A B := fset (fset_keys A ++ fset_keys B).
 
-Definition fsetI A B := fset [seq x <- fset_keys A | x \in fset_keys B].
+Definition fset_of A (P : pred A) :=
+  fset [seq val x | x <- enum [finType of A] & P x].
 
-Definition fsetD A B := fset [seq k <- fset_keys A | k \notin fset_keys B].
+Local Notation "[ 'fset' x : A | P ]" := (fset_of (fun x : A => P%B))
+  (at level 0, x at level 99, format "[ 'fset'  x  :  A  |  P ]").
+Local Notation "[ 'fset'  x  :  T  'in'  A  |  P ]" :=
+  (fset_of (fun a : A => (fun x : T => P%B) (val a)))
+  (at level 0, x at level 99, only parsing).
+Local Notation "[ 'fset' x 'in' A | P ]" := [fset x : _ in A | P]
+  (at level 0, x at level 99, format "[ 'fset'  x  'in'  A  |  P ]").
+
+Definition fsetI A B := [fset x : K in A | x \in B].
+
+Definition fsetD A B := [fset x in A | x \notin B].
 
 Definition fsubset A B := fsetI A B == A.
 
 Definition fproper A B := fsubset A B && ~~ fsubset B A.
-
-Definition FSet A (X : {set A}) : {fset K} :=
-  fset [seq val x | x <- enum X].
 
 Definition fdisjoint A B := (fsetI A B == fset0).
 
@@ -347,6 +407,21 @@ Notation "A \fproper B" := (fproper A B)
 
 Notation "[ 'disjoint' A & B ]" := (fdisjoint A B) : fset_scope.
 
+Notation "[ 'fset' x : T | P ]" := (fset_of (fun x : T => P%B))
+  (at level 0, x at level 99, format "[ 'fset'  x  :  T  |  P ]") : fset_scope.
+Notation "[ 'fset' x : T | P & Q ]" := [fset x : T | P && Q]
+  (at level 0, x at level 99, format "[ 'fset'  x  :  T  |  P  &  Q ]") : fset_scope.
+Notation "[ 'fset'  x  :  T  'in'  A  |  P ]" :=
+  (fset_of (fun a : A => (fun x : T => P%B) (val a)))
+  (at level 0, x at level 99, only parsing) : fset_scope.
+Notation "[ 'fset' x 'in' A | P ]" := [fset x : _ in A | P]
+  (at level 0, x at level 99, format "[ 'fset'  x  'in'  A  |  P ]") : fset_scope.
+Notation "[ 'fset'  x  :  T  'in' A  |  P  &  Q ]" := [fset x : T in A | P && Q]
+  (at level 0, x at level 99, only parsing) : fset_scope.
+Notation "[ 'fset' x 'in' A | P & Q ]" := [fset x in A | P && Q]
+  (at level 0, x at level 99,
+   format "[ 'fset'  x  'in'  A  |  P  &  Q ]") : fset_scope.
+
 Section Theory.
 
 Variables (K : keyType).
@@ -355,7 +430,7 @@ Implicit Types (a b x : K) (A B C D : {fset K}) (pA pB pC : pred K) (s : seq K).
 Lemma in_fset s : fset s =i s.
 Proof. by move=> a; rewrite sort_keysE. Qed.
 
-Lemma in_fset_in x s : x \in fset s -> x \in s.
+Lemma in_in_fset x s : x \in fset s -> x \in s.
 Proof. by rewrite in_fset. Qed.
 
 Lemma in_fsetT x s : x \in s -> x \in fset s.
@@ -379,17 +454,43 @@ Proof. by rewrite !(inE, sort_keysE, in_cons, mem_cat, orbF). Qed.
 Lemma in_fsetU A B a : (a \in A :|: B) = (a \in A) || (a \in B).
 Proof. by rewrite !(inE, sort_keysE, mem_cat). Qed.
 
+Lemma in_fset_ofP A (P : pred A) a :
+  reflect { aA : a \in A & P (SeqSub aA)} (a \in [fset x : A | P x]).
+Proof.
+apply: (iffP idP) => [|[aA Pa]]; last first.
+  rewrite inE sort_keysE; apply/mapP; exists (SeqSub aA) => //.
+  by rewrite mem_filter Pa mem_enum.
+rewrite inE sort_keysE => /mapP /= [x]; rewrite mem_filter=> /andP [Px _] ->.
+by exists (valP x); set y := SeqSub _; have -> : y = x by apply: val_inj.
+Qed.
+
+Lemma in_fset_of A (P : pred A) a (aA : a \in A) :
+  a \in [fset x : A | P x] =  P (SeqSub aA).
+Proof.
+apply/in_fset_ofP/idP=> [[aA']|Pa]; last by exists aA.
+by set x := SeqSub _;set y := SeqSub _; have -> : y = x by exact: val_inj.
+Qed.
+
+Lemma in_fset_in A pA a : (a \in [fset x in A | pA x]) = (a \in A) && (pA a).
+Proof.
+by apply/in_fset_ofP/idP => [[/= -> -> //]|/andP [aA pAa]]; exists aA.
+Qed.
+
+Lemma val_in_fset A (P : pred A) (k : A) :
+  (val k \in [fset k : A | P k]) = P k.
+Proof. by have Pk := valP k; rewrite in_fset_of; congr P; apply: val_inj. Qed.
+
 Lemma in_fsetI A B a : (a \in A :&: B) = (a \in A) && (a \in B).
-Proof. by rewrite !inE /= !sort_keysE !mem_filter andbC. Qed.
+Proof. by rewrite in_fset_in. Qed.
 
 Lemma in_fsetD A B a : (a \in A :\: B) = (a \notin B) && (a \in A).
-Proof. by rewrite !inE /= !sort_keysE !mem_filter. Qed.
+Proof. by rewrite in_fset_in andbC. Qed.
 
 Lemma in_fsetD1 A b a : (a \in A :\ b) = (a != b) && (a \in A).
 Proof. by rewrite in_fsetD in_fset1. Qed.
 
 Definition in_fsetE :=
-  (in_fset0, in_fset1, in_fsetU, in_fset1U, in_fsetI, in_fsetD, in_fsetD1).
+  (in_fset_in, in_fset0, in_fset1, in_fsetU, in_fset1U, in_fsetI, in_fsetD, in_fsetD1).
 
 Lemma fsetIC (A B : {fset K}) : A :&: B = B :&: A.
 Proof. by apply/fsetP => a; rewrite !in_fsetI andbC. Qed.
@@ -457,6 +558,9 @@ Proof.
 apply: (iffP fset_eqP) => AsubB a; first by rewrite -AsubB in_fsetI => /andP[].
 by rewrite in_fsetI; have [/AsubB|] := boolP (a \in A).
 Qed.
+
+Lemma fset_of_sub A (P : pred A) : [fset x : A | P x] \fsubset A.
+Proof. by apply/fsubsetP => k /in_fset_ofP []. Qed.
 
 Lemma fsetD_eq0 (A B : {fset K}) : (A :\: B == fset0) = (A \fsubset B).
 Proof.
@@ -1064,41 +1168,6 @@ move=> pUA; apply/andP.
 by split; apply: fsub_proper_trans pUA; rewrite (fsubsetUr, fsubsetUl).
 Qed.
 
-Lemma val_in_FSet A (X : {set A}) (k : A) : (val k \in FSet X) = (k \in X).
-Proof.
-by rewrite inE /= sort_keysE mem_map ?mem_enum => //= x y ?; apply: val_inj.
-Qed.
-
-Lemma FSet_sub A (X : {set A}) : FSet X \fsubset A.
-Proof.
-apply/fsubsetP => k; rewrite inE /= sort_keysE => /mapP [/= x].
-by rewrite mem_enum => _ ->; apply: valP.
-Qed.
-
-Lemma in_FSet A (X : {set A}) (k : K) (kA : k \in A) :
-  (k \in FSet X) = (SeqSub kA \in X).
-Proof. by rewrite -val_in_FSet. Qed.
-
-Lemma FSetP A (X : {set A}) (k : K) :
-  reflect {kA : k \in A & SeqSub kA \in X} (k \in FSet X).
-Proof.
-apply: (iffP idP) => [|[kA kA_X]]; last by rewrite in_FSet.
-rewrite inE sort_keysE => /mapP [/= x x_in_X ->].
-exists (valP x); rewrite mem_enum in x_in_X.
-by set y := (y in y \in X); suff <- : x = y by []; apply: val_inj.
-Qed.
-
-Lemma fsubK A B : A \fsubset B -> FSet (fsub B A) = A.
-Proof.
-move=> AsubB; apply/fsetP => k /=; symmetry.
-have [kB|kNB] := (boolP (k \in B)); first by rewrite in_FSet in_fsub.
-rewrite (contraNF (fsubsetP (FSet_sub _) _)) //.
-by apply: contraNF kNB; apply: fsubsetP.
-Qed.
-
-Lemma FSetK A (X : {set A}) : fsub A (FSet X) = X.
-Proof. by apply/setP => x; rewrite in_fsub val_in_FSet. Qed.
-
 Lemma fsetI_eq0 A B : (A :&: B == fset0) = [disjoint A & B].
 Proof. by []. Qed.
 
@@ -1198,6 +1267,239 @@ Proof. by rewrite fdisjointUX fdisjoint1X. Qed.
 
 End Theory.
 
+Notation Local imfset_def :=
+  (fun (K : keyType) (T : finType) (f : T -> K) (P : mem_pred T) =>
+  fset [seq f x | x <- enum P]).
+Notation Local imfset2_def :=
+  (fun (K : keyType) (T1 T2 : finType) (f : T1 -> T2 -> K)
+      (P1 : mem_pred T1) (P2 : T1 -> mem_pred T2) =>
+  fset (flatten [seq [seq f x y | y <- enum (P2 x)]| x <- enum P1])).
+
+
+Module Type ImfsetSig.
+Parameter imfset : forall (K : keyType) (T : finType),
+                   (T -> K) -> mem_pred T -> {fset K}.
+Parameter imfset2 : forall (K : keyType) (T1 T2 : finType),
+                   (T1 -> T2 -> K) -> mem_pred T1 -> (T1 -> mem_pred T2) ->
+                   {fset K}.
+Axiom imfsetE : imfset = imfset_def.
+Axiom imfset2E : imfset2 = imfset2_def.
+End ImfsetSig.
+
+Module Imfset : ImfsetSig.
+Definition imfset := imfset_def.
+Definition imfset2 := imfset2_def.
+Lemma imfsetE : imfset = imfset_def. Proof. by []. Qed.
+Lemma imfset2E : imfset2 = imfset2_def. Proof. by []. Qed.
+End Imfset.
+
+Notation imfset := Imfset.imfset.
+Notation imfset2 := Imfset.imfset2.
+Canonical imfset_unlock := Unlockable Imfset.imfsetE.
+Canonical imfset2_unlock := Unlockable Imfset.imfset2E.
+
+Notation "f @: A" := (imfset f (mem A)) (at level 24) : fset_scope.
+Notation "f @2: ( A , B )" := (imfset2 f (mem A) (fun _ => mem B))
+  (at level 24, format "f  @2:  ( A ,  B )") : fset_scope.
+
+(* Comprehensions *)
+Notation "[ 'fset' E | x 'in' A ]" := ((fun x => E) @: A)
+  (at level 0, E, x at level 99,
+   format "[ '[hv' 'fset'  E '/ '  |  x  'in'  A ] ']'") : fset_scope.
+Notation "[ 'fset' E | x 'in' A & P ]" := [fset E | x in [fset x in A | P]]
+  (at level 0, E, x at level 99,
+   format "[ '[hv' 'fset'  E '/ '  |  x  'in'  A '/ '  &  P ] ']'") : fset_scope.
+Notation "[ 'fset' E | x 'in' A , y 'in' B ]" :=
+  (imfset2 (fun x y => E) (mem A) (fun x => (mem B)))
+  (at level 0, E, x, y at level 99, format
+   "[ '[hv' 'fset'  E '/ '  |  x  'in'  A , '/   '  y  'in'  B ] ']'"
+  ) : fset_scope.
+Notation "[ 'fset' E | x 'in' A , y 'in' B & P ]" :=
+  [fset E | x in A, y in [fset y in B | P]]
+  (at level 0, E, x, y at level 99, format
+   "[ '[hv' 'fset'  E '/ '  |  x  'in'  A , '/   '  y  'in'  B '/ '  &  P ] ']'"
+  ) : fset_scope.
+
+(* Typed variants. *)
+Notation "[ 'fset' E | x : T 'in' A ]" := ((fun x : T => E) @: A)
+  (at level 0, E, x at level 99, only parsing) : fset_scope.
+Notation "[ 'fset' E | x : T 'in' A & P ]" :=
+  [fset E | x : T in [set x : T in A | P]]
+  (at level 0, E, x at level 99, only parsing) : fset_scope.
+Notation "[ 'fset' E | x : T 'in' A , y : U 'in' B ]" :=
+  (imset2 (fun (x : T) (y : U) => E) (mem A) (fun (x : T) => (mem B)))
+  (at level 0, E, x, y at level 99, only parsing) : fset_scope.
+Notation "[ 'fset' E | x : T 'in' A , y : U 'in' B & P ]" :=
+  [fset E | x : T in A, y : U in [set y : U in B | P]]
+  (at level 0, E, x, y at level 99, only parsing) : fset_scope.
+
+(* Comprehensions over a type. *)
+Local Notation predOfType T := (sort_of_simpl_pred (@pred_of_argType T)).
+Notation "[ 'fset' E | x : T ]" := [fset E | x : T in predOfType T]
+  (at level 0, E, x at level 99,
+   format "[ '[hv' 'fset'  E '/ '  |  x  :  T ] ']'") : fset_scope.
+Notation "[ 'fset' E | x : T & P ]" := [fset E | x : T in [set x : T | P]]
+  (at level 0, E, x at level 99,
+   format "[ '[hv' 'fset'  E '/ '  |  x  :  T '/ '  &  P ] ']'") : fset_scope.
+Notation "[ 'fset' E | x : T , y : U 'in' B ]" :=
+  [fset E | x : T in predOfType T, y : U in B]
+  (at level 0, E, x, y at level 99, format
+   "[ '[hv' 'fset'  E '/ '  |  x  :  T , '/   '  y  :  U  'in'  B ] ']'")
+   : fset_scope.
+Notation "[ 'fset' E | x : T , y : U 'in' B & P ]" :=
+  [fset E | x : T, y : U in [fset y in B | P]]
+  (at level 0, E, x, y at level 99, format
+ "[ '[hv ' 'fset'  E '/'  |  x  :  T , '/  '  y  :  U  'in'  B '/'  &  P ] ']'"
+  ) : fset_scope.
+Notation "[ 'fset' E | x : T 'in' A , y : U ]" :=
+  [fset E | x : T in A, y : U in predOfType U]
+  (at level 0, E, x, y at level 99, format
+   "[ '[hv' 'fset'  E '/ '  |  x  :  T  'in'  A , '/   '  y  :  U ] ']'")
+   : fset_scope.
+Notation "[ 'fset' E | x : T 'in' A , y : U & P ]" :=
+  [fset E | x : T in A, y : U in [set y in P]]
+  (at level 0, E, x, y at level 99, format
+   "[ '[hv' 'fset'  E '/ '  |  x  :  T  'in'  A , '/   '  y  :  U  &  P ] ']'")
+   : fset_scope.
+Notation "[ 'fset' E | x : T , y : U ]" :=
+  [fset E | x : T, y : U in predOfType U]
+  (at level 0, E, x, y at level 99, format
+   "[ '[hv' 'fset'  E '/ '  |  x  :  T , '/   '  y  :  U ] ']'")
+   : fset_scope.
+Notation "[ 'fset' E | x : T , y : U & P ]" :=
+  [fset E | x : T, y : U in [set y in P]]
+  (at level 0, E, x, y at level 99, format
+   "[ '[hv' 'fset'  E '/ '  |  x  :  T , '/   '  y  :  U  &  P ] ']'")
+   : fset_scope.
+
+(* Untyped variants. *)
+Notation "[ 'fset' E | x , y 'in' B ]" := [fset E | x : _, y : _ in B]
+  (at level 0, E, x, y at level 99, only parsing) : fset_scope.
+Notation "[ 'fset' E | x , y 'in' B & P ]" := [fset E | x : _, y : _ in B & P]
+  (at level 0, E, x, y at level 99, only parsing) : fset_scope.
+Notation "[ 'fset' E | x 'in' A , y ]" := [fset E | x : _ in A, y : _]
+  (at level 0, E, x, y at level 99, only parsing) : fset_scope.
+Notation "[ 'fset' E | x 'in' A , y & P ]" := [fset E | x : _ in A, y : _ & P]
+  (at level 0, E, x, y at level 99, only parsing) : fset_scope.
+Notation "[ 'fset' E | x , y ]" := [fset E | x : _, y : _]
+  (at level 0, E, x, y at level 99, only parsing) : fset_scope.
+Notation "[ 'fset' E | x , y & P ]" := [fset E | x : _, y : _ & P ]
+  (at level 0, E, x, y at level 99, only parsing) : fset_scope.
+
+(* Print-only variants to work around the Coq pretty-printer K-term kink. *)
+Notation "[ 'fse' 't' E | x 'in' A , y 'in' B ]" :=
+  (imset2 (fun x y => E) (mem A) (fun _ => mem B))
+  (at level 0, E, x, y at level 99, format
+   "[ '[hv' 'fse' 't'  E '/ '  |  x  'in'  A , '/   '  y  'in'  B ] ']'")
+   : fset_scope.
+Notation "[ 'fse' 't' E | x 'in' A , y 'in' B & P ]" :=
+  [se t E | x in A, y in [fset y in B | P]]
+  (at level 0, E, x, y at level 99, format
+ "[ '[hv ' 'fse' 't'  E '/'  |  x  'in'  A , '/  '  y  'in'  B '/'  &  P ] ']'"
+  ) : fset_scope.
+Notation "[ 'fse' 't' E | x : T , y : U 'in' B ]" :=
+  (imset2 (fun x (y : U) => E) (mem (predOfType T)) (fun _ => mem B))
+  (at level 0, E, x, y at level 99, format
+   "[ '[hv ' 'fse' 't'  E '/'  |  x  :  T , '/  '  y  :  U  'in'  B ] ']'")
+   : fset_scope.
+Notation "[ 'fse' 't' E | x : T , y : U 'in' B & P ]" :=
+  [se t E | x : T, y : U in [fset y in B | P]]
+  (at level 0, E, x, y at level 99, format
+"[ '[hv ' 'fse' 't'  E '/'  |  x  :  T , '/  '  y  :  U  'in'  B '/'  &  P ] ']'"
+  ) : fset_scope.
+Notation "[ 'fse' 't' E | x : T 'in' A , y : U ]" :=
+  (imset2 (fun x y => E) (mem A) (fun _ : T => mem (predOfType U)))
+  (at level 0, E, x, y at level 99, format
+   "[ '[hv' 'fse' 't'  E '/ '  |  x  :  T  'in'  A , '/   '  y  :  U ] ']'")
+   : fset_scope.
+Notation "[ 'fse' 't' E | x : T 'in' A , y : U & P ]" :=
+  (imset2 (fun x (y : U) => E) (mem A) (fun _ : T => mem [fset y \in P]))
+  (at level 0, E, x, y at level 99, format
+"[ '[hv ' 'fse' 't'  E '/'  |  x  :  T  'in'  A , '/  '  y  :  U '/'  &  P ] ']'"
+  ) : fset_scope.
+Notation "[ 'fse' 't' E | x : T , y : U ]" :=
+  [se t E | x : T, y : U in predOfType U]
+  (at level 0, E, x, y at level 99, format
+   "[ '[hv' 'fse' 't'  E '/ '  |  x  :  T , '/   '  y  :  U ] ']'")
+   : fset_scope.
+Notation "[ 'fse' 't' E | x : T , y : U & P ]" :=
+  [se t E | x : T, y : U in [set y in P]]
+  (at level 0, E, x, y at level 99, format
+   "[ '[hv' 'fse' 't'  E '/'  |  x  :  T , '/   '  y  :  U '/'  &  P ] ']'")
+   : fset_scope.
+
+Section imfset.
+
+Variable (K : keyType).
+Implicit Types (A B : {fset K}).
+
+Definition FSet A (X : {set A}) := [fset val k | k : A in X].
+
+Lemma imfsetP (T : finType) (f : T -> K) (D : mem_pred T) (k : K) :
+  reflect (exists2 x : T, in_mem x D & k = f x) (k \in imfset f D).
+Proof. by rewrite unlock inE /= sort_keysE; exact: imageP. Qed.
+
+Lemma in_imfset (T : finType) (f : T -> K) (D : pred T) (x : T) :
+   x \in D -> f x \in [fset f x | x in D].
+Proof. by move=> xD; apply/imfsetP; exists x. Qed.
+
+Lemma mem_imfset (T : finType) (f : T -> K) (D : pred T): injective f ->
+  forall (k : T), (f k \in [fset f x | x in D]) = (k \in D).
+Proof. by move=> f_inj k; rewrite unlock inE /= sort_keysE mem_image. Qed.
+
+Lemma imfset2P (T1 T2 : finType) (f : T1 -> T2 -> K)
+      (D1 : mem_pred T1) (D2 : T1 -> mem_pred T2) (k : K) :
+  reflect (exists2 x : T1, in_mem x D1
+         & exists2 y : T2, in_mem y (D2 x) & k = f x y)
+          (k \in imfset2 f D1 D2).
+Proof.
+rewrite unlock !inE /= !sort_keysE.
+apply: (iffP flatten_mapP) => [[x xD1 /mapP [y yD2]]|[x xD1 [y yD2]]] ->.
+  by rewrite !mem_enum in xD1 yD2; exists x => //; exists y.
+by exists x; rewrite ?mem_enum //; apply/mapP; exists y; rewrite ?mem_enum.
+Qed.
+
+Lemma in_imfset2 (T1 T2 : finType) (f : T1 -> T2 -> K)
+      (D1 : mem_pred T1) (D2 : T1 -> mem_pred T2) (k : K) (x : T1) (y : T2) :
+   x \in D1 -> y \in D2 x -> f x y \in [fset f x y | x in D1, y in D2 x].
+Proof. by move=> xD1 yD2; apply/imfset2P; exists x => //; exists y. Qed.
+
+
+Lemma val_in_FSet A (X : {set A}) (k : A) : (val k \in FSet X) = (k \in X).
+Proof. by rewrite mem_imfset //; apply: val_inj. Qed.
+
+Lemma in_FSet A (X : {set A}) (k : K) (kA : k \in A) :
+  (k \in FSet X) = (SeqSub kA \in X).
+Proof. by rewrite -val_in_FSet. Qed.
+
+Lemma FSetP A (X : {set A}) (k : K) :
+  reflect {kA : k \in A & SeqSub kA \in X} (k \in FSet X).
+Proof.
+apply: (iffP idP) => [|[kA kA_X]]; last by rewrite in_FSet.
+rewrite /FSet unlock inE sort_keysE => /mapP [/= x x_in_X ->].
+exists (valP x); rewrite mem_enum in x_in_X.
+by set y := (y in y \in X); suff <- : x = y by []; apply: val_inj.
+Qed.
+
+Lemma FSetE A (X : {set A}) :  FSet X = [fset k : A | k \in X].
+Proof. by apply/fsetP=> k; apply/FSetP/in_fset_ofP. Qed.
+
+Lemma FSet_sub A (X : {set A}) : FSet X \fsubset A.
+Proof. by apply/fsubsetP => k /FSetP []. Qed.
+
+Lemma fsubK A B : A \fsubset B -> FSet (fsub B A) = A.
+Proof.
+move=> AsubB; apply/fsetP => k /=; symmetry.
+have [kB|kNB] := (boolP (k \in B)); first by rewrite in_FSet in_fsub.
+rewrite (contraNF (fsubsetP (FSet_sub _) _)) //.
+by apply: contraNF kNB; apply: fsubsetP.
+Qed.
+
+Lemma FSetK A (X : {set A}) : fsub A (FSet X) = X.
+Proof. by apply/setP => x; rewrite in_fsub val_in_FSet. Qed.
+
+End imfset.
+
 Section DefMap.
 Variables (K : keyType) (V : Type).
 
@@ -1249,6 +1551,7 @@ Arguments nilf {K V}.
 Arguments setf : simpl never.
 Arguments fnd : simpl never.
 
+Notation "[fmap]" := nilf : fmap_scope.
 Notation "x .[ k <- v ]" := (setf x k v) : fmap_scope.
 Notation "f .[? k ]" := (fnd f k) : fmap_scope.
 
@@ -1327,7 +1630,7 @@ rewrite setfK; case: eqVneq => //= [->|kNk0]; first by rewrite eqxx.
 by rewrite -in_fnd (negPf kNk0).
 Qed.
 
-Lemma fmap_nil V (f : {fmap K -> V}) : domf f = fset0 -> f = nilf.
+Lemma fmap_nil V (f : {fmap K -> V}) : domf f = fset0 -> f = [fmap].
 Proof. by move=> kf0; apply: getfP. Qed.
 
 Lemma getf_set V (f : {fmap K -> V}) (k : K) (v : V) (kf' : k \in _) :
@@ -1345,168 +1648,153 @@ Proof. by apply: Some_inj; rewrite -in_fnd !fnd_set in_fnd; case: ifP. Qed.
 
 End MapTheory.
 
-Section Ops2.
+Section ReduceOp.
 
-Variable (K : keyType).
+Variable (K : keyType) (V : Type).
+Implicit Types (f : {fmap K -> option V}).
 
-Lemma reducef_subproof V (f : {fmap K -> option V})
-      (X := FSet [set x : domf f | f x])
-      (x : X) (x' := (SeqSub (fsubsetP (FSet_sub _) _ (valP x)))) : f x'.
+Lemma reducef_subproof f
+      (X := [fset x : domf f | f x])
+      (x : X) (x' := (SeqSub (fsubsetP (fset_of_sub _) _ (valP x)))) : f x'.
 Proof.
-suff : val x' \in X by rewrite val_in_FSet inE.
+suff : val x' \in X by rewrite val_in_fset.
 by have -> : val x' = val x by []; last apply: valP.
 Qed.
 
-Definition reducef V (f : {fmap K -> option V}) : {fmap K -> V} :=
-  FinMap [ffun x => oextract (@reducef_subproof V f x)].
+Definition reducef f : {fmap K -> V} :=
+  FinMap [ffun x => oextract (@reducef_subproof f x)].
 
-Definition filterf V (f : {fmap K -> V}) (P : pred K) :=
-  reducef (FinMap [ffun x : domf f =>
-                   if P (val x) then Some (f x) else None]).
-
-Definition restrictf V (f : {fmap K -> V}) (A : {fset K}) :=
-  filterf f (mem A).
-
-Arguments reducef : simpl never.
-Arguments filterf : simpl never.
-Arguments restrictf : simpl never.
-Notation "x .[: A ]" := (restrictf x A) : fmap_scope.
-Notation "x .[\ A ]" := (x.[: domf x :\: A]) : fmap_scope.
-Notation "x .[~ k ]" := (x.[\ [fset k]]) : fmap_scope.
-
-Lemma domf_reduce V (f : {fmap K -> option V}) :
- domf (reducef f) = FSet [set k : domf f | f k].
+Lemma domf_reduce f : domf (reducef f) = [fset k : domf f | f k].
 Proof. by []. Qed.
 
-Lemma mem_reducef V (f : {fmap K -> option V}) k :
-  k \in reducef f = ojoin f.[? k].
+Lemma mem_reducef f k : k \in reducef f = ojoin f.[? k].
 Proof.
-rewrite inE; case: fndP => [kf|] /=; first by rewrite in_FSet in_set.
-by apply: contraNF; apply: (fsubsetP (FSet_sub _)).
+rewrite inE; case: fndP => [kf|] /=; first by rewrite in_fset_of.
+by apply: contraNF; apply: (fsubsetP (fset_of_sub _)).
 Qed.
 
-Lemma in_FSet_set (A : {fset K}) (P : pred K) (k : K) :
-  k \in FSet [set k : A | P (val k)] = (k \in A) && (P k).
-Proof.
-apply/FSetP/idP => [[kA]|/andP[kA Pk]]; first by rewrite in_set kA.
-by exists kA; rewrite in_set.
-Qed.
-
-Lemma mem_filterf V (f : {fmap K -> V}) (P : pred K) (k : K) :
-  (k \in filterf f P) = (k \in f) && (P k) :> bool.
-Proof.
-rewrite mem_reducef; case: fndP => [kf|kNf //].
-by rewrite ffunE /=; case: (P _).
-Qed.
-
-Lemma domf_filterf V (f : {fmap K -> option V}) (P : pred K) :
- domf (filterf f P) = FSet [set k : domf f | P (val k)].
-Proof. by apply/fsetP => k; rewrite mem_filterf in_FSet_set. Qed.
-
-Lemma mem_restrictf V (f : {fmap K -> V}) (A : {fset K}) (k : K) :
-   k \in f.[: A] = (k \in A) && (k \in f) :> bool.
-Proof. by rewrite mem_filterf andbC. Qed.
-
-Lemma mem_remf V (f : {fmap K -> V}) (A : {fset K}) (k : K) :
-   k \in f.[\ A] = (k \notin A) && (k \in f) :> bool.
-Proof. by rewrite mem_restrictf in_fsetE -andbA andbb. Qed.
-
-Lemma mem_remf1 V (f : {fmap K -> V}) (k' k : K) :
-   k \in f.[~ k'] = (k != k') && (k \in f) :> bool.
-Proof. by rewrite mem_remf in_fsetE. Qed.
-
-Lemma domf_restrict V (f : {fmap K -> V}) A : domf f.[: A] = A :&: domf f.
-Proof. by apply/fsetP=> k'; rewrite mem_restrictf !in_fsetE. Qed.
-
-Lemma domf_rem V (f : {fmap K -> V}) A : domf f.[\ A] = domf f :\: A.
-Proof. by rewrite domf_restrict fsetIDAC fsetIid. Qed.
-
-Lemma mem_remfF V (f : {fmap K -> V}) (k : K) : k \in f.[~ k] = false.
-Proof. by rewrite mem_remf1 eqxx. Qed.
-
-Lemma fnd_reducef  V (f : {fmap K -> option V}) k :
-  (reducef f).[? k] = ojoin f.[? k].
+Lemma fnd_reducef f k : (reducef f).[? k] = ojoin f.[? k].
 Proof.
 case: fndP => /= [kf|]; last by rewrite mem_reducef; case: ojoin.
 rewrite ffunE /= Some_oextract; apply: Some_inj; rewrite -in_fnd.
 by rewrite Some_ojoin // ojoinT // -mem_reducef.
 Qed.
 
-Lemma get_reducef  V (f : {fmap K -> option V}) k
-  (krf : k \in reducef f) (kf : k \in f):
+Lemma get_reducef f k (krf : k \in reducef f) (kf : k \in f):
   Some (reducef f).[krf] = f.[kf].
 Proof. by rewrite -in_fnd fnd_reducef in_fnd. Qed.
 
-Lemma fnd_filterf V (f : {fmap K -> V}) P k :
-  (filterf f P).[? k] = if P k then f.[? k] else None.
+End ReduceOp.
+
+Arguments reducef : simpl never.
+
+Section RestrictionOps.
+
+Variable (K : keyType) (V : Type).
+Implicit Types (f g : {fmap K -> V}).
+
+Definition filterf f (P : pred K) := reducef
+  (FinMap [ffun x : domf f => if P (val x) then Some (f x) else None]).
+
+Definition restrictf f (A : {fset K}) :=  filterf f (mem A).
+
+Notation "x .[: A ]" := (restrictf x A) : fmap_scope.
+Notation "x .[\ A ]" := (x.[: domf x :\: A]) : fmap_scope.
+Notation "x .[~ k ]" := (x.[\ [fset k]]) : fmap_scope.
+
+Lemma mem_filterf f (P : pred K) (k : K) :
+  (k \in filterf f P) = (k \in f) && (P k) :> bool.
+Proof.
+rewrite mem_reducef; case: fndP => [kf|kNf //].
+by rewrite ffunE /=; case: (P _).
+Qed.
+
+Lemma domf_filterf f (P : pred K) :
+ domf (filterf f P) = [fset k in domf f | P k].
+Proof. by apply/fsetP => k; rewrite mem_filterf in_fsetE. Qed.
+
+Lemma mem_restrictf f (A : {fset K}) (k : K) :
+   k \in f.[: A] = (k \in A) && (k \in f) :> bool.
+Proof. by rewrite mem_filterf andbC. Qed.
+
+Lemma mem_remf f (A : {fset K}) (k : K) :
+   k \in f.[\ A] = (k \notin A) && (k \in f) :> bool.
+Proof. by rewrite mem_restrictf in_fsetE -andbA andbb. Qed.
+
+Lemma mem_remf1 f (k' k : K) :
+   k \in f.[~ k'] = (k != k') && (k \in f) :> bool.
+Proof. by rewrite mem_remf in_fsetE. Qed.
+
+Lemma domf_restrict f A : domf f.[: A] = A :&: domf f.
+Proof. by apply/fsetP=> k'; rewrite mem_restrictf !in_fsetE. Qed.
+
+Lemma domf_rem f A : domf f.[\ A] = domf f :\: A.
+Proof. by rewrite domf_restrict fsetIDAC fsetIid. Qed.
+
+Lemma mem_remfF f (k : K) : k \in f.[~ k] = false.
+Proof. by rewrite mem_remf1 eqxx. Qed.
+
+Lemma fnd_filterf f P k : (filterf f P).[? k] = if P k then f.[? k] else None.
 Proof.
 rewrite fnd_reducef; have [[] Pk [] kf] := (ifP, fndP f k);
 do ?by [rewrite in_fnd ?ffunE /= ?Pk|rewrite not_fnd ?ffunE /= ?Pk].
 Qed.
 
-Lemma get_filterf V (f : {fmap K -> V}) P k
-  (kff : k \in filterf f P) (kf : k \in f) :
+Lemma get_filterf f P k (kff : k \in filterf f P) (kf : k \in f) :
   (filterf f P).[kff] = f.[kf].
 Proof.
 apply: Some_inj; rewrite get_reducef ffunE /=; case: ifPn => //.
 by move: kff; rewrite mem_filterf => /andP [? ->].
 Qed.
 
-Lemma fnd_restrict V (f : {fmap K -> V}) A (k : K) :
-  f.[: A].[? k] = if k \in A then f.[? k] else None.
+Lemma fnd_restrict f A (k : K) :
+   f.[: A].[? k] = if k \in A then f.[? k] else None.
 Proof. by rewrite fnd_filterf. Qed.
 
-Lemma fnd_rem V (f : {fmap K -> V}) A (k : K) :
-  f.[\ A].[? k] = if k \in A then None else f.[? k].
+Lemma fnd_rem f A (k : K) : f.[\ A].[? k] = if k \in A then None else f.[? k].
 Proof.
 rewrite fnd_restrict in_fsetE.
 by case: fndP => ?; rewrite ?(andbT, andbF) //=; case: (_ \in _).
 Qed.
 
-Lemma restrictf_comp V (f : {fmap K -> V}) A B :
-  f.[: A].[: B] = f.[: A :&: B].
+Lemma restrictf_comp f A B : f.[: A].[: B] = f.[: A :&: B].
 Proof.
 by apply/fmapP=> k; rewrite !fnd_restrict !in_fsetE; do !case: (_ \in _).
 Qed.
 
-Lemma remf_comp V (f : {fmap K -> V}) A B :
-  f.[\ A].[\ B] = f.[\ A :|: B].
+Lemma remf_comp f A B : f.[\ A].[\ B] = f.[\ A :|: B].
 Proof. by apply/fmapP=> k; rewrite !fnd_rem in_fsetE; do !case: (_ \in _). Qed.
 
-Lemma restrictfT V (f : {fmap K -> V}) : f.[: domf f] = f.
+Lemma restrictfT f : f.[: domf f] = f.
 Proof. by apply/fmapP=> k; rewrite fnd_restrict; case: fndP. Qed.
 
-Lemma restrictf0 V (f : {fmap K -> V}) : f.[: fset0] = nilf.
+Lemma restrictf0 f : f.[: fset0] = [fmap].
 Proof. by apply/fmapP => k; rewrite fnd_restrict in_fsetE not_fnd. Qed.
 
-Lemma remf0 V (f : {fmap K -> V}) : f.[\ fset0] = f.
-Proof. by rewrite fsetD0 restrictfT. Qed.
+Lemma remf0 f : f.[\ fset0] = f. Proof. by rewrite fsetD0 restrictfT. Qed.
 
-Lemma fnd_rem1 V (f : {fmap K -> V}) (k k' : K) :
+Lemma fnd_rem1 f (k k' : K) :
   f.[~ k].[? k'] = if k' != k then f.[? k'] else None.
 Proof. by rewrite fnd_rem in_fsetE; case: eqP. Qed.
 
-Lemma getf_restrict V (f : {fmap K -> V}) A (k : K)
-      (kf : k \in f) (kfA : k \in f.[: A]) :
+Lemma getf_restrict f A (k : K) (kf : k \in f) (kfA : k \in f.[: A]) :
       f.[: A].[kfA] = f.[kf].
 Proof. by rewrite get_filterf. Qed.
 
-Lemma setf_restrict V (f : {fmap K -> V}) A (k : K) (v : V) :
+Lemma setf_restrict f A (k : K) (v : V) :
   f.[: A].[k <- v] = f.[k <- v].[: k |: A].
 Proof.
 by apply/fmapP=> k'; rewrite !(fnd_set, fnd_restrict, in_fsetE); case: eqP.
 Qed.
 
-Lemma setf_rem V (f : {fmap K -> V}) A (k : K) (v : V) :
+Lemma setf_rem f A (k : K) (v : V) :
   f.[\ A].[k <- v] = f.[k <- v].[\ (A :\ k)].
 Proof. by rewrite setf_restrict fsetUDl. Qed.
 
-Lemma setf_rem1 V (f : {fmap K -> V}) (k : K) (v : V) :
-  f.[~ k].[k <- v] = f.[k <- v].
+Lemma setf_rem1 f (k : K) (v : V) : f.[~ k].[k <- v] = f.[k <- v].
 Proof. by rewrite setf_rem fsetDv remf0. Qed.
 
-Lemma setfC V (f : {fmap K -> V}) k1 k2 v1 v2 :
-   f.[k1 <- v1].[k2 <- v2] =
+Lemma setfC f k1 k2 v1 v2 : f.[k1 <- v1].[k2 <- v2] =
    if k2 == k1 then f.[k2 <- v2] else f.[k2 <- v2].[k1 <- v1].
 Proof.
 apply/fmapP => k; rewrite (fun_if (fnd^~ k)) !fnd_set.
@@ -1514,56 +1802,53 @@ have [[->|kNk2] [// <-|k2Nk1]] // := (altP (k =P k2), altP (k2 =P k1)).
 by rewrite (negPf kNk2).
 Qed.
 
-Lemma restrictf_mkdom V (f : {fmap K -> V}) A : f.[: A] = f.[: domf f :&: A].
+Lemma restrictf_mkdom f A : f.[: A] = f.[: domf f :&: A].
 Proof.
 apply/fmapP=> k; rewrite !fnd_restrict in_fsetE.
 by case: fndP => ?; rewrite ?(andbT, andbF) //=; case: (_ \in _).
 Qed.
 
-Lemma restrictf_id V (f : {fmap K -> V}) A :
-  [disjoint domf f & A] -> f.[: A] = nilf.
+Lemma restrictf_id f A : [disjoint domf f & A] -> f.[: A] = [fmap].
 Proof. by move=> dAf; rewrite restrictf_mkdom (eqP dAf) restrictf0. Qed.
 
-Lemma remf_id V (f : {fmap K -> V}) A : [disjoint domf f & A] -> f.[\ A] = f.
+Lemma remf_id f A : [disjoint domf f & A] -> f.[\ A] = f.
 Proof. by move=> /fsetDidPl ->; rewrite restrictfT. Qed.
 
-Lemma remf1_id V (f : {fmap K -> V}) k : k \notin f -> f.[~ k] = f.
+Lemma remf1_id f k : k \notin f -> f.[~ k] = f.
 Proof. by move=> kNf; rewrite remf_id //= fdisjointX1. Qed.
 
-Lemma restrictf_set V (f : {fmap K -> V}) A (k : K) (v : V) :
+Lemma restrictf_set f A (k : K) (v : V) :
   f.[k <- v].[: A] = if k \in A then f.[: A].[k <- v] else f.[: A].
 Proof.
 apply/fmapP => k' /=; rewrite (fun_if (fnd^~ _)) !(fnd_restrict, fnd_set).
 by case: eqP => [->|]; do !case: ifP.
 Qed.
 
-Lemma remf_set V (f : {fmap K -> V}) A (k : K) (v : V) :
+Lemma remf_set f A (k : K) (v : V) :
   f.[k <- v].[\ A] = if k \in A then f.[\ A] else f.[\ A].[k <- v].
 Proof.
 apply/fmapP => k' /=; rewrite (fun_if (fnd^~ _)) !(fnd_rem, fnd_set).
 by case: eqP => [->|]; do !case: ifP.
 Qed.
 
-Lemma remf1_set V (f : {fmap K -> V}) (k k' : K) (v : V) :
+Lemma remf1_set f (k k' : K) (v : V) :
   f.[k' <- v].[~ k] = if k == k' then f.[~ k] else f.[~ k].[k' <- v].
 Proof. by rewrite remf_set in_fsetE eq_sym. Qed.
 
-Lemma setf_inj V (f f' : {fmap K -> V}) k v :
-  k \notin f -> k \notin f' -> f.[k <- v] = f'.[k <- v]-> f = f'.
+Lemma setf_inj f f' k v : k \notin f -> k \notin f' ->
+                          f.[k <- v] = f'.[k <- v]-> f = f'.
 Proof.
 move=> kf kf' eq_fkv; apply/fmapP => k'; have := congr1 (fnd^~ k') eq_fkv.
 by rewrite !fnd_set; case: eqP => // ->; rewrite !not_fnd.
 Qed.
 
-End Ops2.
+End RestrictionOps.
 
+Arguments filterf : simpl never.
+Arguments restrictf : simpl never.
 Notation "x .[: A ]" := (restrictf x A) : fmap_scope.
 Notation "x .[\ A ]" := (x.[: domf x :\: A]) : fmap_scope.
 Notation "x .[~ k ]" := (x.[\ [fset k]]) : fmap_scope.
-
-(* (***********************) *)
-(* (* Porting in progress *) *)
-(* (***********************) *)
 
 Section Cat.
 Variables (K : keyType) (V : Type).
@@ -1608,10 +1893,10 @@ Lemma getf_catr f g k (kfg : k \in domf (f + g))
       (kg : k \in domf g) : (f + g).[kfg] = g.[kg].
 Proof. by apply: Some_inj; rewrite -in_fnd fnd_cat kg in_fnd. Qed.
 
-Lemma catf0 f : f + nilf = f.
+Lemma catf0 f : f + [fmap] = f.
 Proof. by apply/fmapP => k; rewrite fnd_cat in_fset0. Qed.
 
-Lemma cat0f f : nilf + f = f.
+Lemma cat0f f : [fmap] + f = f.
 Proof.
 by apply/fmapP => k; rewrite fnd_cat; case: ifPn => //= ?; rewrite !not_fnd.
 Qed.
@@ -1726,6 +2011,7 @@ Qed.
 
 End Cat.
 
+Arguments catf : simpl never.
 Notation "f + g" := (catf f g) : fset_scope.
 
 Section FinMapEqType.
