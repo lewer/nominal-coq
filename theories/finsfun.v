@@ -249,3 +249,23 @@ Lemma injective_finsfunP (g : finsfun (@id K)) :
 Proof. by have [H1 [H2 H3]]:= injective_finsfun_subproof g; split=> [/H1|]. Qed.
 
 End InjectiveFinSFun.
+
+Section Image.
+
+Variables (K V : keyType) (default : K -> V).
+Implicit Types (f : finsfun default).
+
+Definition im f (A : {fset K}) : {fset V} :=
+  fset (map f (fset_keys A)).
+
+Lemma im_f f (A : {fset K}) (a : K) : a \in A -> f a \in im f A. 
+Proof. by move => aA; rewrite in_fset; apply map_f. Qed.
+
+Lemma mem_im f (A : {fset K}) (a : K) : 
+  injective f -> (f a \in im f A) = (a \in A).
+Proof.                                       
+move => f_inj. apply/idP/idP; last exact: im_f.
+rewrite in_fset => /mapP [x P] /eqP. by rewrite inj_eq // => /eqP ->. 
+Qed.
+
+End Image.
