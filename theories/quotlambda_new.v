@@ -296,99 +296,71 @@ Section Transpositions.
 
 Implicit Types (a b c : atom).
 
-Definition tffun a b  := [ffun x : [fset a;b] => if val x == a then b else a].
+Local Notation transp a b := [fun z => z with a |-> b, b |-> a].               
 
-Lemma tfinsfun_subproof a b (a_neq_b : a != b) : 
-  [forall k, tffun a b k != val k].
-Proof.
-apply/forallP => k. move: (valP k). 
-rewrite in_fset2 => /orP. case =>  [k_eq_a | k_eq_b]. 
-  by rewrite ffunE k_eq_a (eqP k_eq_a) eq_sym. 
-by rewrite ffunE (eqP k_eq_b) [b==a]eq_sym (negbTE a_neq_b).
-Qed.
-
-Definition tfinsfun a b (a_neq_b : a != b) := 
-  @finsfun_of_can_ffun _ _ (@id atom) _ _ (tfinsfun_subproof a_neq_b).
-
-Lemma inv_tfinsfun a b (a_neq_b : a != b) :
-  involutive (tfinsfun a_neq_b).
-Proof.
-move => c. case : (finsuppP _ c); first by move => *; rewrite finsfun_dflt.
-rewrite in_fset2 => /orP. case => /eqP ->.
-rewrite !finsfun_of_can_ffunE.
-  - exact: set21.
-  - move => *. by rewrite ffunE eq_refl set22. 
-  - exact: set21.
-  - move => *. by rewrite !ffunE /= ffunE /= eq_refl eq_sym (negbTE a_neq_b).
-rewrite !finsfun_of_can_ffunE.
-  - exact: set22.
-  - move => *. by rewrite ffunE /= eq_sym (negbTE a_neq_b) set21. 
-  - exact: set22.
-  - move => *. by rewrite !ffunE /= ffunE /= [b==a]eq_sym (negbTE a_neq_b) eq_refl.
-Qed.
-
-(* à factoriser *)
-
-Lemma inj_tfinsfun a b (a_neq_b : a != b) : 
-  injectiveb_finsfun_id (tfinsfun a_neq_b).
-Proof. by apply/injectiveb_finsfunP/inv_inj/inv_tfinsfun. Qed.
-
-Definition tfinperm a b (a_neq_b : a != b) :=
-  FinPerm (inj_tfinsfun a_neq_b).
+Definition tfinsfun a b := 
+  @finsfun_of_fun _ _ (@id atom) [fun z => z with a |-> b, b |-> a] [fset a;b].
 
 CoInductive tfinperm_spec a b c : atom -> Type :=
   | TFinpermFirst of c = a : tfinperm_spec a b c b
   | TFinpermSecond of c = b : tfinperm_spec a b c a
   | TFinpermNone of (c != a) && (c != b) : tfinperm_spec a b c c.
 
-Lemma tfinpermP a b c (a_neq_b : a != b) : 
-  tfinperm_spec a b c (tfinperm a_neq_b c).
+Lemma tfinpermP a b c  : 
+  tfinperm_spec a b c (tfinsfun a b c).
 Proof.
-case: finsuppP; rewrite in_fset2. 
-  by rewrite negb_or; exact: TFinpermNone.
-move => cab; rewrite finsfun_of_can_ffunE.
-  case: (orP cab) => /eqP ->. exact: set21. exact: set22.
-move => *. rewrite ffunE /=.
-case ca : (c == a); first by apply/TFinpermFirst/(eqP ca).
-move: ca cab -> => /eqP ->. by apply TFinpermSecond.
+rewrite finsfun_of_funE /=; last first.
+  move => {c} c /=. apply contraR. rewrite in_fset2 negb_or 
+  => /andP [ c_neq_a c_neq_b]. by rewrite (negbTE c_neq_a) (negbTE c_neq_b).
+have [c_eq_a | c_neq_a] := (boolP (c == a)).
+  by constructor; apply/eqP.
+have [c_eq_b | c_neq_b] := (boolP (c == b)).
+  by constructor; apply/eqP.
+by constructor; apply /andP. 
 Qed.
 
-Lemma tfinpermL a a' (a_neq_a' : a != a') :
-  (tfinperm a_neq_a') a = a'.
+Lemma inj_tfinsfun a b : 
+  injectiveb_finsfun_id (tfinsfun a b).
+Proof. 
+apply/injectiveb_finsfunP => x y. 
+by case: tfinpermP; case: tfinpermP => //; do ?move-> => // ;
+move/andP => [neq1 neq2] eq1; do ?move => eq2;
+move : neq1 neq2; rewrite ?eq1 ?eq2 eqxx.
+Qed.
+
+Definition tfinperm a b :=
+  FinPerm (inj_tfinsfun a b).
+
+Lemma tfinpermL a a' :
+  (tfinperm a a') a = a'.
 Proof. by case: tfinpermP => //; rewrite eqxx. Qed.
 
-Lemma tfinpermR a a' (a_neq_a' : a != a') :
-  (tfinperm a_neq_a') a' = a.
+Lemma tfinpermR a a' :
+  (tfinperm a a') a' = a.
 Proof. by case: tfinpermP => //; rewrite eqxx => /andP [ ? ?]. Qed.
 
-Lemma tfinpermNone a a' (aa' : a != a') b :
-  (b != a) && (b != a') -> (tfinperm aa') b = b.
+Lemma tfinpermNone a a' b :
+  (b != a) && (b != a') -> (tfinperm a a') b = b.
 Proof. by case: tfinpermP => //; move ->; rewrite eqxx //= andbF. Qed.
 
-Lemma tfinperm_perm_subproof a a' (aa' : a != a') (π : finPerm) :
-  π a != π a'.
-Proof. rewrite inj_eq //. by apply: finperm_inj. Qed.
+Lemma tfinsfun_id a :
+  tfinsfun a a = 1.
+Proof.
+apply/finsfunP => b; rewrite finsfun1.
+by case: tfinpermP; symmetry.
+Qed.
 
-Lemma tfinperm_perm a a' (aa' : a != a') (π : finPerm) :
-  π * (tfinperm aa') = tfinperm (tfinperm_perm_subproof aa' π) * π.
+
+Lemma tfinperm_perm a a' (π : finPerm) :
+  π * (tfinperm a a') = tfinperm (π a) (π a') * π.
 Proof.
 apply/eq_finPermP => b. rewrite !finsfunM /=.
-case: (tfinpermP b aa'); do ?move ->; rewrite ?tfinpermL ?tfinpermR //.
-move/andP => [ba ba']. have [πb_out] : (π b != π a) && (π b != π a').
+case: (tfinpermP a a' b) ; do ?move ->; 
+rewrite ?tfinpermL ?tfinpermR ?tfinsfun_id ?finsfun1 //.
+move/andP => [ab a'b]. have [πb_out] : (π b != π a) && (π b != π a').
   by rewrite !inj_eq; do ?apply finperm_inj; apply/andP.
 by rewrite tfinpermNone.
 Qed.
-
-Lemma tfinperm_eqmorph (a b a' b' : atom) (ab : a != b) (a'b' : a' != b') :
-  a = a' -> b = b' -> tfinperm ab = tfinperm a'b'.
-Proof.
-move => aa' bb'. apply/eq_finPermP => c.
-case: tfinpermP; do ?move ->.
-  - by rewrite aa' tfinpermL.
-  - by rewrite bb' tfinpermR.
-  - rewrite aa' bb' => *. by rewrite tfinpermNone. 
-Qed.
-
 
 End Transpositions.
 
@@ -490,9 +462,9 @@ move => /fsubsetP AinclB. have: fresh B \notin B by exact: fresh_notin.
 by apply/contra/AinclB.
 Qed.
 
-Lemma fresh_transp (a a' : atom) (aa' : a != a') (x : X)
+Lemma fresh_transp (a a' : atom) (x : X)
       (a_fresh_x : a \notin support x) (a'_fresh_x : a' \notin support x) :
-  swap aa' \dot x = x.
+  swap a a' \dot x = x.
 Proof.
 apply act_id => b bsuppx. case: tfinpermP => //= b_eq; rewrite b_eq in bsuppx. 
   by rewrite bsuppx in a_fresh_x.
@@ -538,7 +510,7 @@ move => Requi; split; first by exists (support x).
 move => [a a_fresh_x rax] a' a'_fresh_x.
 case: (eqVneq a a'); first by move <-.
 move => aa'. 
-rewrite -[a'](tfinpermL aa') -[x](fresh_transp aa') //. 
+rewrite -[a'](tfinpermL a a') -[x](fresh_transp a_fresh_x a'_fresh_x) //. 
 by apply Requi.
 Qed.
 
@@ -662,22 +634,6 @@ Fixpoint raw_depth (t : rawterm) : nat :=
 Lemma raw_depth_perm (π : finPerm) t : raw_depth (π \dot t) = raw_depth t.
 Proof. by elim: t => [x|u ihu v ihv|x u ihu] //=; rewrite ?ihu ?ihv. Qed.
 
-Lemma alpha_subproofa a a' (t t' : rawterm) : 
-  fresh ([fset a;a'] :|: support t :|: support t') != a.
-Proof.
-rewrite -neq_fresh fresh_subsetnotin // fsubsetU // fsubsetU //. 
-apply/orP; left. apply/fsubsetP => b; rewrite in_fset1 => /eqP ->.
-by rewrite set21.
-Qed.
-
-Lemma alpha_subproofa' a a' (t t' : rawterm) : 
-  fresh ([fset a;a'] :|: support t :|: support t') != a'.
-Proof.
-rewrite -neq_fresh fresh_subsetnotin // fsubsetU // fsubsetU //. 
-apply/orP; left. apply/fsubsetP => b; rewrite in_fset1 => /eqP ->.
-by rewrite set22.
-Qed.
-
 (* coq bug : la définition Fixpoint alpha t1 t2 n := ... provoque l'erreur
 Anomaly: replace_tomatch. Please report. *)
 
@@ -687,13 +643,33 @@ Fixpoint alpha_rec n t1 t2 :=
       | S n, rApp t1 t2, rApp t1' t2' => alpha_rec n t1 t1' && alpha_rec n t2 t2'
       | S n, rLambda a t, rLambda a' t' => 
        let a'' := fresh ([fset a; a'] :|: support t :|: support t') in 
-       alpha_rec n (swap (alpha_subproofa a a' t t') \dot t) 
-             (swap (alpha_subproofa' a a' t t') \dot t)
+       alpha_rec n (swap a a' \dot t) 
+             (swap a a' \dot t)
       |_, _, _ => false
   end.
 
 Definition alpha t t' := alpha_rec (raw_depth t) t t'.
 
+(*
+Lemma alpha_recE n t t' : (raw_depth t <= n) -> alpha_rec n t t' = alpha t t'.
+Proof.
+rewrite /alpha; move: {-2}n (leqnn n).
+elim: n t t' => //= [|n ihn] [x|u v|x u] [y|u' v'|y u'] [|m] //=.
+  rewrite !ltnS geq_max => lmn /andP [um vm]. 
+  rewrite !ihn //. ?(leq_maxl, leq_maxr) ?geq_max
+             ?(leq_trans um, leq_trans vm) //.
+by rewrite !ltnS => lmn um; rewrite ihn // ?pre_depth_perm //.
+Qed.
+*)
+
+(*
+Inductive alpha_spec t1 t2 : rawterm -> rawterm -> bool -> Type :=
+  | AlphaVar a & t1 = rVar a & t2 = rVar a: alpha_spec t1 t2 (rVar a) (rVar a) true
+  | AlphaApp u1 v1 u2 v2 & t1 = rApp u1 v1 & t2 = rApp u2 v2 :
+  alpha_spec t1 t2 (rApp u1 v1) (rApp u2 v2) (alpha u1 u2 && alpha v1 v2)
+  | AlphaLam a u1 u2 & t1 = rLambda a u1 & t2 = rLambda a u2 :
+  alpha_spec t1 t2 (rLambda a u1) (rLambda a u2) (alpha u1 u2).
+*)
 (* Lemma equi_alpha π : {mono actN π : t1 t2 / alpha t1 t2}.
 Proof.
 move =>t1 t2 /=; rewrite /alpha raw_depth_perm.
@@ -706,8 +682,7 @@ Inductive alpha_spec : rawterm -> rawterm -> Prop :=
   |AlphaVar a : alpha_spec (rVar a) (rVar a)
   |AlphaApp t1 t1' t2 t2' : alpha_spec t1 t1' -> alpha_spec t2 t2' -> 
                             alpha_spec (rApp t1 t2) (rApp t1' t2')
-  |AlphaLam a a' t t' : (\new a'', forall (aa'' : a != a'') (a'a'' : a' != a''),
-                                     alpha_spec (swap aa'' \dot t) (swap a'a'' \dot t'))
+  |AlphaLam a a' t t' : (\new a'', alpha_spec (swap a a'' \dot t) (swap a' a'' \dot t'))
                         -> alpha_spec (rLambda a t) (rLambda a' t').
 
 Lemma alpha_ind (P : rawterm -> rawterm -> Prop) :
@@ -716,10 +691,8 @@ Lemma alpha_ind (P : rawterm -> rawterm -> Prop) :
                              alpha_spec v v' -> P v v' -> 
                              P (rApp u v) (rApp u' v')) ->
 (forall (x y : atom) u u',
-   (\new z, forall (xz : x != z) (yz : y != z), 
-            alpha_spec (swap xz \dot u) (swap yz \dot u')) ->
-   (\new z, forall (xz : x != z) (yz : y != z),
-              P (swap xz \dot u) (swap yz \dot u')) ->
+   (\new z, alpha_spec (swap x z \dot u) (swap y z \dot u')) ->
+   (\new z, P (swap x z \dot u) (swap y z \dot u')) ->
  P (rLambda x u) (rLambda y u')) ->
 forall t t' : rawterm, alpha_spec t t' -> P t t'.
 Proof.
@@ -732,20 +705,10 @@ case: att' dt => //.
   move=> u v u' v' auu' avv' /= [duv].
   by apply: Papp => //; apply: ihn => //; rewrite -duv (leq_maxl, leq_maxr).
 move=> x y u u' auu' [du]; apply: Plam => //.
-case: auu' => S HS; exists S => z zNS xz yz.
+case: auu' => S HS; exists S => z zNS.
 apply: ihn. by rewrite raw_depth_perm du. by apply HS.
 Qed.
                    
-(*
-move => Pvar Papp Plam. elim. 
-  - move => x t' xαt'. inversion xαt'. exact: (Pvar x).
-  - move => u ihu v ihv t' uvαt'; inversion uvαt'; apply Papp => //; 
-      by [apply ihu | apply ihv].
-  - move => x t iht t' xtαt'. inversion xtαt'; apply Plam => //.
-    move: H2 => [S HS]. exists S => z zNS xz yz xzαyz. inversion xtαt'.
-    échoue 
-*)
-
 Lemma equi_alpha t t' π : alpha_spec t t' <-> alpha_spec (π \dot t) (π \dot t'). 
 Proof.
 wlog suff : t t' π / alpha_spec t t' -> alpha_spec (π \dot t) (π \dot t') => [hw|].
@@ -755,18 +718,24 @@ move => /alpha_ind E. elim/E : {t t' E} _ =>
   [x|u v u' v' uαu' πuαπu' vαv' πvαπv' | x y u u' Hu Hπu].
   - by constructor.
   - by  constructor. 
-  - case: Hπu => S HS. constructor. exists (im π S) => z zNS πx_z πy_z.
-    rewrite -!actM. have [x_πinvz y_πinvz]: x != π^-1 z /\ y != π^-1 z.
-      by split; rewrite -(can2_eq (finpermK π) (finpermVK π)).
-    have πinvzNS : π^-1 z \notin S. 
-      rewrite -(@mem_im _ _ (@id atom) π S) ?finpermVK //; exact: finperm_inj.
-    move: (HS _ πinvzNS x_πinvz y_πinvz). rewrite -!actM !tfinperm_perm.
-    suff: swap (tfinperm_perm_subproof x_πinvz π) = swap πx_z /\
-          swap (tfinperm_perm_subproof y_πinvz π) = swap πy_z.
-    (* comment faire un pattern matching qui évite d'écrire tout le terme ? *)
-      by move => [h1 h2]; move:  h1 h2 ->; move ->.
-    split; by apply tfinperm_eqmorph; rewrite ?finpermVK.
+  - case: Hπu => S HS. constructor. exists (im π S) => z zNS.
+    rewrite -!actM -[z](finpermVK π z) -!tfinperm_perm actM; rewrite actM.
+    apply HS. rewrite -(@mem_im _ _ (@id atom) π S) ?finpermVK //.
+    exact: finperm_inj.                                                
 Qed.
 
+Lemma alphaP t t' : reflect (alpha_spec t t') (alpha t t').
+Proof.
+apply: (equivP idP).
+case: t; case: t' => //=; rewrite /alpha /=;
+  try solve [move => *; split => // H; inversion H].                           
+  - move => x y; split => [|H].
+      by move/eqP ->; constructor.
+    by apply/eqP; inversion H.  (* comment éviter inversion ?*)
+  - move => u' v' u v.
+
+move => /alpha_ind E. elim/E : {t t' E} _ => [x | u v u' v' _ uαu' _ vαv' |].
+  - by rewrite/alpha /=. 
+  - rewrite/alpha /=. 
 End NominalLambdaTerms.
 
