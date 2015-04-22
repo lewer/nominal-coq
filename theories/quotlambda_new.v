@@ -270,7 +270,7 @@ Proof. by apply val_inj. Qed.
 
 (* le lemme myvalK doit déjà exister, mais je l'ai pas trouvé *)
 
-Lemma permK π : cancel π π^-1.
+Lemma finpermK π : cancel π π^-1.
 Proof.
 move => a. case: (finPermP π a) => [aNπ | aπ].
   by rewrite finsfun_dflt.
@@ -278,13 +278,13 @@ rewrite finPerm_can; first by apply: valP.
 move => πaπ. by rewrite myvalK can_inv -permM mulgV perm1.
 Qed.
 
-Lemma permVK π : cancel π^-1 π.
-Proof. by move=> a; rewrite -{1}[π]finperm_invK permK. Qed.
+Lemma finpermVK π : cancel π^-1 π.
+Proof. by move=> a; rewrite -{1}[π]finperm_invK finpermK. Qed.
 
 Lemma finperm_invP : left_inverse finperm_one finperm_inv finperm_mul.
 Proof.
 move => π. apply/eq_finPermP => a. 
-by rewrite finsfunM /= permK finsfun1. 
+by rewrite finsfunM /= finpermK finsfun1. 
 Qed.
 
 Lemma finperm_invVP : right_inverse finperm_one finperm_inv finperm_mul.
@@ -337,9 +337,9 @@ Definition tfinperm a b (a_neq_b : a != b) :=
   FinPerm (inj_tfinsfun a_neq_b).
 
 CoInductive tfinperm_spec a b c : atom -> Type :=
-  | TFinpermFirst : c = a -> tfinperm_spec a b c b
-  | TFinpermSecond : c = b -> tfinperm_spec a b c a
-  | TFinpermNone : (c != a) && (c != b) -> tfinperm_spec a b c c.
+  | TFinpermFirst of c = a : tfinperm_spec a b c b
+  | TFinpermSecond of c = b : tfinperm_spec a b c a
+  | TFinpermNone of (c != a) && (c != b) : tfinperm_spec a b c c.
 
 Lemma tfinpermP a b c (a_neq_b : a != b) : 
   tfinperm_spec a b c (tfinperm a_neq_b c).
@@ -360,6 +360,35 @@ Proof. by case: tfinpermP => //; rewrite eqxx. Qed.
 Lemma tfinpermR a a' (a_neq_a' : a != a') :
   (tfinperm a_neq_a') a' = a.
 Proof. by case: tfinpermP => //; rewrite eqxx => /andP [ ? ?]. Qed.
+
+Lemma tfinpermNone a a' (aa' : a != a') b :
+  (b != a) && (b != a') -> (tfinperm aa') b = b.
+Proof. by case: tfinpermP => //; move ->; rewrite eqxx //= andbF. Qed.
+
+Lemma tfinperm_perm_subproof a a' (aa' : a != a') (π : finPerm) :
+  π a != π a'.
+Proof. rewrite inj_eq //. by apply: finperm_inj. Qed.
+
+Lemma tfinperm_perm a a' (aa' : a != a') (π : finPerm) :
+  π * (tfinperm aa') = tfinperm (tfinperm_perm_subproof aa' π) * π.
+Proof.
+apply/eq_finPermP => b. rewrite !finsfunM /=.
+case: (tfinpermP b aa'); do ?move ->; rewrite ?tfinpermL ?tfinpermR //.
+move/andP => [ba ba']. have [πb_out] : (π b != π a) && (π b != π a').
+  by rewrite !inj_eq; do ?apply finperm_inj; apply/andP.
+by rewrite tfinpermNone.
+Qed.
+
+Lemma tfinperm_eqmorph (a b a' b' : atom) (ab : a != b) (a'b' : a' != b') :
+  a = a' -> b = b' -> tfinperm ab = tfinperm a'b'.
+Proof.
+move => aa' bb'. apply/eq_finPermP => c.
+case: tfinpermP; do ?move ->.
+  - by rewrite aa' tfinpermL.
+  - by rewrite bb' tfinpermR.
+  - rewrite aa' bb' => *. by rewrite tfinpermNone. 
+Qed.
+
 
 End Transpositions.
 
@@ -470,7 +499,7 @@ apply act_id => b bsuppx. case: tfinpermP => //= b_eq; rewrite b_eq in bsuppx.
 by rewrite bsuppx in a'_fresh_x.
 Qed.
 
-Lemma neq_fresh (a a' : atom) (aa' : a != a') :
+Lemma neq_fresh (a a' : atom) :
   (a \notin support a') = (a != a').
 Proof. by rewrite in_fset1. Qed.
 
@@ -529,6 +558,11 @@ by move=> Requi x; have [fn nh ef] := some_any Requi x; split=> [/nh|/ef].
 Qed.
 
 End SomeAny.
+
+Notation "\new a , P" := (new (fun a:atom => P))
+   (format "\new  a ,  P", at level 200).
+Notation "a # x" := (a \notin support x)
+                      (at level 0).
 
 Section NominalLambdaTerms.
 
@@ -618,4 +652,121 @@ Definition term_nominal_mixin :=
 
 Canonical term_nominalType := @NominalType rawterm_choiceType term_nominal_mixin.
 
+Fixpoint raw_depth (t : rawterm) : nat :=
+  match t with 
+    | rVar _ => 0
+    | rApp t1 t2 => (maxn (raw_depth t1) (raw_depth t2)).+1
+    | rLambda _ t => (raw_depth t).+1
+  end.
+
+Lemma raw_depth_perm (π : finPerm) t : raw_depth (π \dot t) = raw_depth t.
+Proof. by elim: t => [x|u ihu v ihv|x u ihu] //=; rewrite ?ihu ?ihv. Qed.
+
+Lemma alpha_subproofa a a' (t t' : rawterm) : 
+  fresh ([fset a;a'] :|: support t :|: support t') != a.
+Proof.
+rewrite -neq_fresh fresh_subsetnotin // fsubsetU // fsubsetU //. 
+apply/orP; left. apply/fsubsetP => b; rewrite in_fset1 => /eqP ->.
+by rewrite set21.
+Qed.
+
+Lemma alpha_subproofa' a a' (t t' : rawterm) : 
+  fresh ([fset a;a'] :|: support t :|: support t') != a'.
+Proof.
+rewrite -neq_fresh fresh_subsetnotin // fsubsetU // fsubsetU //. 
+apply/orP; left. apply/fsubsetP => b; rewrite in_fset1 => /eqP ->.
+by rewrite set22.
+Qed.
+
+(* coq bug : la définition Fixpoint alpha t1 t2 n := ... provoque l'erreur
+Anomaly: replace_tomatch. Please report. *)
+
+Fixpoint alpha_rec n t1 t2 :=
+  match n, t1, t2 with
+      | n, rVar a1, rVar a2 => a1 == a2
+      | S n, rApp t1 t2, rApp t1' t2' => alpha_rec n t1 t1' && alpha_rec n t2 t2'
+      | S n, rLambda a t, rLambda a' t' => 
+       let a'' := fresh ([fset a; a'] :|: support t :|: support t') in 
+       alpha_rec n (swap (alpha_subproofa a a' t t') \dot t) 
+             (swap (alpha_subproofa' a a' t t') \dot t)
+      |_, _, _ => false
+  end.
+
+Definition alpha t t' := alpha_rec (raw_depth t) t t'.
+
+(* Lemma equi_alpha π : {mono actN π : t1 t2 / alpha t1 t2}.
+Proof.
+move =>t1 t2 /=; rewrite /alpha raw_depth_perm.
+elim: t1 t2 => [x|u v|x u] [y|u' v'|y u'] //=. [a a'|t'1 iht'1 t'2 iht'2 t1|] //;
+rewrite /alpha ?raw_depth_perm.
+  - by apply: (inj_eq (@finperm_inj π)).
+  - move => bla. *)
+
+Inductive alpha_spec : rawterm -> rawterm -> Prop :=
+  |AlphaVar a : alpha_spec (rVar a) (rVar a)
+  |AlphaApp t1 t1' t2 t2' : alpha_spec t1 t1' -> alpha_spec t2 t2' -> 
+                            alpha_spec (rApp t1 t2) (rApp t1' t2')
+  |AlphaLam a a' t t' : (\new a'', forall (aa'' : a != a'') (a'a'' : a' != a''),
+                                     alpha_spec (swap aa'' \dot t) (swap a'a'' \dot t'))
+                        -> alpha_spec (rLambda a t) (rLambda a' t').
+
+Lemma alpha_ind (P : rawterm -> rawterm -> Prop) :
+(forall a : atom, P (rVar a) (rVar a)) ->
+(forall u v u' v' : rawterm, alpha_spec u u' -> P u u' ->
+                             alpha_spec v v' -> P v v' -> 
+                             P (rApp u v) (rApp u' v')) ->
+(forall (x y : atom) u u',
+   (\new z, forall (xz : x != z) (yz : y != z), 
+            alpha_spec (swap xz \dot u) (swap yz \dot u')) ->
+   (\new z, forall (xz : x != z) (yz : y != z),
+              P (swap xz \dot u) (swap yz \dot u')) ->
+ P (rLambda x u) (rLambda y u')) ->
+forall t t' : rawterm, alpha_spec t t' -> P t t'.
+Proof.
+move=> Pvar Papp Plam t t'.
+move: {-1}(raw_depth t) (leqnn (raw_depth t)) => n.
+elim: n t t' => [|n ihn] t t'.
+  by rewrite leqn0 => /eqP dt att'; case: att' dt.
+rewrite leq_eqVlt => /predU1P [dt att'|/ihn]; last exact.
+case: att' dt => //.
+  move=> u v u' v' auu' avv' /= [duv].
+  by apply: Papp => //; apply: ihn => //; rewrite -duv (leq_maxl, leq_maxr).
+move=> x y u u' auu' [du]; apply: Plam => //.
+case: auu' => S HS; exists S => z zNS xz yz.
+apply: ihn. by rewrite raw_depth_perm du. by apply HS.
+Qed.
+                   
+(*
+move => Pvar Papp Plam. elim. 
+  - move => x t' xαt'. inversion xαt'. exact: (Pvar x).
+  - move => u ihu v ihv t' uvαt'; inversion uvαt'; apply Papp => //; 
+      by [apply ihu | apply ihv].
+  - move => x t iht t' xtαt'. inversion xtαt'; apply Plam => //.
+    move: H2 => [S HS]. exists S => z zNS xz yz xzαyz. inversion xtαt'.
+    échoue 
+*)
+
+Lemma equi_alpha t t' π : alpha_spec t t' <-> alpha_spec (π \dot t) (π \dot t'). 
+Proof.
+wlog suff : t t' π / alpha_spec t t' -> alpha_spec (π \dot t) (π \dot t') => [hw|].
+  split; first exact: hw.
+  move/(hw (π \dot t) (π \dot t') π^-1). by rewrite -!actM finperm_invP !act1.
+move => /alpha_ind E. elim/E : {t t' E} _ => 
+  [x|u v u' v' uαu' πuαπu' vαv' πvαπv' | x y u u' Hu Hπu].
+  - by constructor.
+  - by  constructor. 
+  - case: Hπu => S HS. constructor. exists (im π S) => z zNS πx_z πy_z.
+    rewrite -!actM. have [x_πinvz y_πinvz]: x != π^-1 z /\ y != π^-1 z.
+      by split; rewrite -(can2_eq (finpermK π) (finpermVK π)).
+    have πinvzNS : π^-1 z \notin S. 
+      rewrite -(@mem_im _ _ (@id atom) π S) ?finpermVK //; exact: finperm_inj.
+    move: (HS _ πinvzNS x_πinvz y_πinvz). rewrite -!actM !tfinperm_perm.
+    suff: swap (tfinperm_perm_subproof x_πinvz π) = swap πx_z /\
+          swap (tfinperm_perm_subproof y_πinvz π) = swap πy_z.
+    (* comment faire un pattern matching qui évite d'écrire tout le terme ? *)
+      by move => [h1 h2]; move:  h1 h2 ->; move ->.
+    split; by apply tfinperm_eqmorph; rewrite ?finpermVK.
+Qed.
+
 End NominalLambdaTerms.
+
