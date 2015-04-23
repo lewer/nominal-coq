@@ -252,20 +252,49 @@ End InjectiveFinSFun.
 
 Section Image.
 
-Variables (K V : keyType) (default : K -> V).
-Implicit Types (f : finsfun default).
+(* TODO : réécrire avec les imfset de Cyril *)
 
-Definition im f (A : {fset K}) : {fset V} :=
-  fset (map f (fset_keys A)).
+Definition im (K V : keyType) (f : K -> V)
+           (A : {fset K}) : {fset V} :=
+  [fset f (val a) | a : A in (sort_of_simpl_pred (@pred_of_argType A))]. 
+
+Variables (K V : keyType). 
+Implicit Types (f : K -> V) (g : V -> K).
 
 Lemma im_f f (A : {fset K}) (a : K) : a \in A -> f a \in im f A. 
-Proof. by move => aA; rewrite in_fset; apply map_f. Qed.
+Proof. move => aA; apply/imfsetP. by exists (SeqSub aA). Qed.
 
 Lemma mem_im f (A : {fset K}) (a : K) : 
   injective f -> (f a \in im f A) = (a \in A).
 Proof.                                       
 move => f_inj. apply/idP/idP; last exact: im_f.
-rewrite in_fset => /mapP [x P] /eqP. by rewrite inj_eq // => /eqP ->. 
+move/imfsetP => [b bA] /eqP. rewrite inj_eq // => /eqP ->. exact: valP.
 Qed.
 
+Lemma im_id (A : {fset K}) : im id A = A.
+Proof.
+apply/fsetP => a. apply/imfsetP/idP => [[x xA] ->|aA]; first exact: valP.  
+by exists (SeqSub aA).
+Qed.
+
+Lemma imM f g A : im (g \o f) A = (im g (im f A)).
+apply/fsetP => a; apply/imfsetP/imfsetP => [ [x xA] ->| [y yfA] ->].
+  have {xA} xA: (val x) \in A by apply valP. by exists (SeqSub (im_f f xA)) =>//.
+have {yfA} yfA: (val y) \in im f A. by apply valP. 
+move: yfA => /imfsetP [a' a'A] ->. by exists a'.
+Qed.
+
+Lemma im_subset f A B : A \fsubset B -> (im f A) \fsubset (im f B).
+Proof.
+move => /fsubsetP AB. apply/fsubsetP => y /imfsetP [x xA] ->.
+have {xA} xA : (val x) \in A by apply valP.
+apply/imfsetP. by exists (SeqSub (AB (val x) xA)) => //.
+Qed.
+
+Lemma im_eq1 f f' : f =1 f' -> im f =1 im f'. 
+Proof.
+move => ff' => A. apply/fsetP => a. apply/imfsetP/imfsetP => [[x xA]->|[x xA]->];
+by exists x.
+Qed.
 End Image.
+
