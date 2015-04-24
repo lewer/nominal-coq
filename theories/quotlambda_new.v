@@ -1,7 +1,7 @@
-Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq.
-Require Import bigop fintype finfun finset generic_quotient perm.
-Require Import tuple.
-Require Import fingroup.
+From mathcomp.ssreflect 
+Require Import ssreflect ssrfun ssrbool ssrnat eqtype seq.
+From mathcomp.discrete Require Import tuple choice bigop fintype finfun finset generic_quotient.
+From mathcomp.fingroup Require Import perm fingroup.
 Require Import finmap.
 Require Import finsfun.
 Set Implicit Arguments.
@@ -13,6 +13,34 @@ Local Open Scope finperm_scope.
 Local Open Scope fset.
 
 Definition atom := nat.
+
+Section fsubset_automation.
+  Import Key.Exports.
+  
+  Context {A : keyType}.
+
+  (** Typeclass to find a proof that [R \fsubset S] given [R] and [S]. *)
+  Class is_fsubset (R : {fset A}) (S : {fset A}) :=
+    fsubset_prf : R \fsubset S.
+
+  Global Instance id_subset S : is_fsubset S S :=
+    { fsubset_prf := fsubsetAA S }.
+  
+  Global Instance left_union_subset S T U (Hl : is_fsubset S T) : is_fsubset S (T :|: U).
+  Proof. 
+      by apply/(fsubset_trans Hl)/fsubsetUl.
+  Qed.
+  
+  Global Instance right_union_subset S T U (Hl : is_fsubset S U) : is_fsubset S (T :|: U).
+  Proof. 
+      by apply/(fsubset_trans Hl)/fsubsetUr.
+  Qed.
+  
+  (** Could be extended for more complex reasoning, probably specialized to atoms and supports *)
+End fsubset_automation.
+
+Hint Mode is_fsubset + + + : typeclass_instances. 
+(* Enforce strictly structural proof search, no looping possible *)
 
 Section FinPermDef.
 
@@ -892,16 +920,15 @@ rewrite ltnS.
 set a := fresh _. set a' := fresh _.
 rewrite -[a'](finpermVK π) -!actM -!tfinperm_conj => ru_lt_n. 
 have u_fix : swap a (π^-1 a') \dot u = u.
-  apply/fresh_transp. apply/fresh_subsetnotin/fsubsetU. 
-  rewrite fsubsetU // fsubsetAA orbT //. rewrite mem_im_supp;
-    last by move => π' x'; apply strong_termsupport.    
-  apply fresh_subsetnotin.
-  rewrite finperm_invK fsubsetU // fsubsetU // fsubsetAA orbT //. 
+  apply/fresh_transp. apply/fresh_subsetnotin/fsubset_prf. 
+  rewrite mem_im_supp;
+    last by move => π' x'; apply strong_termsupport.
+  by rewrite finperm_invK; apply/fresh_subsetnotin/fsubset_prf.
 have u'_fix : swap a (π^-1 a') \dot u' = u'.
-  apply/fresh_transp. apply/fresh_subsetnotin/fsubsetU. 
-  rewrite fsubsetAA // orbT //. rewrite mem_im_supp; 
+  apply/fresh_transp. apply/fresh_subsetnotin/fsubset_prf. 
+  rewrite mem_im_supp; 
     last by move => π' x'; apply strong_termsupport.    
-  apply fresh_subsetnotin. rewrite finperm_invK fsubsetU // fsubsetAA // orbT //.
+   by rewrite finperm_invK; apply/fresh_subsetnotin/fsubset_prf.
 symmetry; rewrite -{2}u_fix -{2}u'_fix (ihn _ _ (π^-1)) ?raw_depth_perm //.
 rewrite -!actM finperm_mulA finperm_mulA !finperm_invP !finperm_oneP. 
 rewrite (ihn _ _ (swap a (π^-1 a'))) ?raw_depth_perm //.
@@ -909,18 +936,20 @@ rewrite -!actM tfinperm_conj [_ * swap y _]tfinperm_conj !tfinpermR !tfinpermNon
 -finperm_can2eq !fresh_neq // in_fsetU in_fsetU in_fsetU ?in_fset1 eqxx ?orbT //.
 Qed.
 
-Lemma alphaP t t' : reflect (alpha_spec t t') (alpha t t').
-Proof.
-apply: (equivP idP).
-case: t; case: t' => //=; rewrite /alpha /=;
-  try solve [move => *; split => // H; inversion H].                           
-  - move => x y; split => [|H].
-      by move/eqP ->; constructor.
-    by apply/eqP; inversion H.  (* comment éviter inversion ?*)
-  - move => u' v' u v.
+End AlphaEquivalence.
 
-move => /alpha_ind E. elim/E : {t t' E} _ => [x | u v u' v' _ uαu' _ vαv' |].
-  - by rewrite/alpha /=. 
-  - rewrite/alpha /=. 
-End NominalLambdaTerms.
+(* Lemma alphaP t t' : reflect (alpha_spec t t') (alpha t t'). *)
+(* Proof. *)
+(* apply: (equivP idP). *)
+(* case: t; case: t' => //=; rewrite /alpha /=; *)
+(*   try solve [move => *; split => // H; inversion H].                            *)
+(*   - move => x y; split => [|H]. *)
+(*       by move/eqP ->; constructor. *)
+(*     by apply/eqP; inversion H.  (* comment éviter inversion ?*) *)
+(*   - move => u' v' u v. *)
+
+(* move => /alpha_ind E. elim/E : {t t' E} _ => [x | u v u' v' _ uαu' _ vαv' |]. *)
+(*   - by rewrite/alpha /=.  *)
+(*   - rewrite/alpha /=.  *)
+(* End NominalLambdaTerms. *)
 

@@ -1,5 +1,7 @@
-Require Import ssreflect ssrbool ssrnat eqtype choice ssrfun seq path.
-Require Import fintype finfun bigop finset.
+From mathcomp.ssreflect 
+Require Import ssreflect ssrbool ssrnat eqtype ssrfun seq.
+From mathcomp.discrete
+Require Import choice  path finset finfun fintype bigop.
 Require Import finmap.
 
 Set Implicit Arguments.
