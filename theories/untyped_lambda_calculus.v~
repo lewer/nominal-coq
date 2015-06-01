@@ -50,8 +50,10 @@ move => π _ y u v.
 by rewrite /subst_f3 Lam_equiv.
 Qed.
 
-Lemma FCB_f3 : FCB_supp fset0 subst_f3.
+Lemma FCB_f3 : FCB subst_f3.
 Proof.
+exists (@fset0 nat_KeyType) => y u v.
+admit.
 Admitted.
 
 Definition subst := term_altrect subst_f1 subst_f2 subst_f3 (x |` support t) fset0 fset0 dflt.
@@ -66,19 +68,9 @@ Proof.
 by rewrite/subst term_altrect_AppE /subst_f2.
 Qed.
 
-Lemma subst_LamE y u : y != x -> y # t -> subst (Lambda y u) = Lambda y (subst u).
+Lemma subst_LamE y u : subst (Lambda y u) = Lambda y (subst u).
 Proof.
-rewrite/subst/subst_f3 => yNx y_fresh_t. 
-apply term_altrect_LamE.
+rewrite/subst term_altrect_LamE /subst_f3 //.
   exact: support_subst_f1.
   exact: support_subst_f2.
   exact: support_subst_f3.
-  exact: FCB_f3.  
-rewrite 2?fsetU0 in_fset1U. by apply /norP. 
-Qed.
-
-Lemma forget u : x # u -> subst u = u.
-Proof.
-elim/term_ind: u.
-
-move: u.

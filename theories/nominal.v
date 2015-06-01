@@ -110,6 +110,9 @@ Canonical prod_nominal_mixin :=
 Canonical prod_nominal_type :=
   NominalType prod_nominal_mixin.
 
+Lemma prodactE π (y : X) (z : Y) : π \dot (y, z) = (π \dot y, π \dot z).
+Proof. by []. Qed.
+
 End NominalProd.
 
 (* Lemma strong_prodctsupport π a : *)
@@ -255,57 +258,91 @@ End NominalBool.
 
 Section Freshness.
 
-(* Definition max (A : {fset atom}) := \max_(a : A) val a.  *)
+Implicit Types (X Y: nominalType).
 
-Fixpoint max_list l := match l with
-                             |[::] => 0
-                             |a::q => maxn (max_list q) a
-                                           end.
+Definition max (A : {fset atom}) := \max_(a : A) val a. 
 
-Definition fresh_list (l : seq atom) := (max_list l).+1.
-Definition fresh (A : {fset atom}) := fresh_list (fset_keys A). 
-(* casse l'interface, mais comment faire autrement ? *)
+Definition fresh_in X (x : X) := (max (support x)).+1. 
 
-(* Lemma fresh_notin A : fresh A \notin A. *)
-(* Proof. *)
-(* rewrite/fresh. *)
-(* suff : (forall x, x \in A -> x <= max A). *)
-(*   move => H. apply contraT. rewrite negbK => /H. by rewrite ltnn. *)
-(* move => x xA.  *)
-(* have : x = val (SeqSub xA) by []; move ->. *)
-(*   apply (@leq_bigmax A val (SeqSub xA)). *)
-(* Qed. *)
+Definition supports X (A : {fset atom}) (x : X) := 
+  forall (π : finPerm), (forall a : atom, a \in A -> π a = a) -> π \dot x = x.
 
-Lemma freshlist_notin (s : seq atom) : (fresh_list s).+1 \notin s.
-Admitted.
-
-Lemma fresh_notin A : fresh A \notin A.
-Admitted.
-
-Lemma fresh_subsetnotin (A B: {fset atom}) : A `<=` B -> fresh B \notin A. 
+Lemma supportsP (X : nominalType) (x : X) :
+  supports (support x) x.
 Proof.
-move => /fsubsetP AinclB. have: fresh B \notin B by exact: fresh_notin.
+move => π. 
+exact: act_id.
+Qed.
+
+Lemma supportsI (X : nominalType) (A B : {fset atom}) (x : X) : 
+  supports A x -> supports B x -> supports (A `&` B) x. 
+Proof.
+(* suppose le théorème de décomposition des permutations en 
+   produit de transpositions *)
+Admitted.
+
+Definition fresh X a (x : X) := exists S, a \notin S /\ supports S x. 
+
+Notation "a # x" := (fresh a x) (at level 0).
+
+Lemma fresh_notin (A : {fset atom}) : (fresh_in A) \notin A.
+Proof.
+Admitted.
+
+Lemma freshP X (x : X) : (fresh_in x) # x.
+Proof.
+exists (support x).
+split.
+  exact: fresh_notin.
+exact: supportsP.
+Qed.
+
+Lemma fresh_subsetnotin (A B: {fset atom}) : A `<=` B -> (fresh_in B) \notin A. 
+Proof.
+move => /fsubsetP AinclB. have: (fresh_in B) \notin B by exact: fresh_notin.
 by apply/contra/AinclB.
 Qed.
 
-Lemma fresh1U A a : fresh (a |` A) != a.
+Lemma fresh_support X a (x : X) : a \notin (support x) -> a # x.
 Proof.
-have : fresh (a |` A) \notin [fset a].
+move => aNx. exists (support x).
+split => //.
+exact: supportsP.
+Qed.
+
+Lemma fresh1U A a : fresh_in (a |` A) != a.
+Proof.
+have : fresh_in (a |` A) \notin [fset a].
   apply/fresh_subsetnotin/fsubsetP => x. rewrite in_fset1 => /eqP ->.
   by rewrite in_fset1U eqxx.
 apply contraR. rewrite negbK => /eqP ->. by rewrite in_fset1.
 Qed.
 
-Lemma fresh_neq (A : {fset atom}) a : a \in A -> a != fresh A.
+Lemma fresh_neq (A : {fset atom}) a : a \in A -> a != fresh_in A.
 Proof. apply contraL => /eqP ->. exact: fresh_notin. Qed.
 
-Lemma fresh_transp (X : nominalType) (a a' : atom) (x : X)
-      (a_fresh_x : a \notin support x) (a'_fresh_x : a' \notin support x) :
-  swap a a' \dot x = x.
+Lemma fresh_prod X Y a (x : X) (y : Y) : a # (x, y) -> (a # x) /\ (a # y). 
 Proof.
-apply act_id => b bsuppx. case: tfinpermP => //= b_eq; rewrite b_eq in bsuppx. 
-  by rewrite bsuppx in a_fresh_x.
-by rewrite bsuppx in a'_fresh_x.
+move => [S] [aNS supp_S_xy].
+split; exists S; split => //; move => π /(supp_S_xy π); rewrite prodactE.
+  by move/(congr1 fst).
+by move/(congr1 snd).
+Qed.
+
+Lemma fresh_transp (X : nominalType) (a b : atom) (x : X) :
+      a # x -> b # x -> swap a b \dot x = x.
+Proof.
+move => [Sa [aNSa supp_Sa_x]] [Sb [bNSb supp_Sb_x]]. 
+have supp_SaISb_x : supports (Sa `&` Sb) x by apply: supportsI.
+apply supp_SaISb_x => c. rewrite in_fsetI => /andP [cSa cSb].
+have aNc : c != a.
+  apply/negP => /eqP a_eq_c. move: cSa aNSa.
+  by rewrite a_eq_c => ->. 
+have bNc : c != b.
+  apply/negP => /eqP b_eq_c. move: cSb bNSb.
+  by rewrite b_eq_c => ->.
+apply tfinpermNone. 
+by rewrite aNc bNc.
 Qed.
 
 Lemma fresh_perm (X : nominalType) (π : finPerm) (x : X) : 
@@ -317,6 +354,8 @@ exact: finsfun_dflt.
 Qed.
 
 End Freshness.
+
+Notation "a # x" := (fresh a x) (at level 0).
 
 Section EquivariantFunctions.
 
@@ -387,51 +426,41 @@ End FinitelySupportedFunctions.
 
 Section StrongSupport.
 
-Variables (X : nominalType).
+Variables (X : nominalType) (S : {fset atom}).
 Implicit Types (x : X).
 
-(* hypothèse équivalente à : "support x" est le plus petit support de x *)
+(* hypothèse qui implique que S est le plus petit support de x *)
 Hypothesis strong_support : 
-  forall x π, π \dot x = x -> (forall a : atom, a \in support x -> π a == a).
+  forall x π, π \dot x = x -> (forall a : atom, a \in (support x) -> π a == a).
 
 Lemma equi_support : equivariant1 (@support X).
 Proof.
 move => π x.
-wlog suff : x π / im π (support x) `<=` support (π \dot x).  
+wlog suff : x π / im π (support x) `<=` support (π \dot x).
   move => Hsuff; apply/eqP; rewrite eqEfsubset; apply/andP; split; last by apply Hsuff.
   rewrite -(actVK π (support (π \dot x))) -{2}[x](actK π x);
   exact/im_subset/Hsuff.
-apply/fsubsetP => a /imfsetP [b bx] ->. apply contraT => πbNπx. 
-pose c := fresh (val b |` im π^-1 (support (π \dot x))).
+apply/fsubsetP => a /imfsetP [b bx] ->. apply contraT => πbNπx.
+set c := fresh_in (val b, im π^-1 (support (π \dot x))).
 have : swap (val b) c \dot x = x.
-  apply (@act_inj _ π). rewrite -actM tfinperm_conj actM fresh_transp //. 
-  rewrite -(actVK π (support (π \dot x))); rewrite mem_im;
-    last exact: finperm_inj.  
-  by apply fresh_subsetnotin; rewrite fsubsetU1.
+  apply (@act_inj _ π). rewrite -actM tfinperm_conj actM fresh_transp //.
+    exact: fresh_support πbNπx.
+  exists (support (π \dot x)).
+  split; last exact: supportsP.
+  rewrite -(actVK π (support (π \dot x))) mem_im.
+    by admit.  
+  exact: finperm_inj.
 have {bx} bx : val b \in support x. by apply valP.
 move/strong_support => H. move: (H (val b) bx).
-rewrite tfinpermL => /eqP cvalb. move: (fresh1U  (im π^-1 (support (π \dot x))) (val b)).
-by rewrite-/c -cvalb eqxx. 
-Qed.
+rewrite tfinpermL => /eqP cvalb. 
+Admitted.
 
-Lemma mem_im_supp (π : finPerm) a x : 
-  π a \in (support x) = (a \in support (π^-1 \dot x)).
+Lemma im_fresh (π : finPerm) a x : (π a) # x <-> a # (π^-1 \dot x).
 Proof.
-by rewrite -[a \in _](mem_imperm π) equi_support -actM finperm_invVP act1. 
+(* en cours *)
 Qed.
-
-Lemma supp_fx (Y : nominalType) (f : X -> Y) (S : {fset atom})  (fs_f : function_support1 f S) : forall (x : X), support (f x) `<=` (S `|` support x).
-Proof.
-move => x.
-apply/fsubsetP => a. apply contraLR => aNS.
-have test : (swap a (fresh (a |` support x))) \dot x = x.
-  admit.
-
-Abort All.
-
 
 End StrongSupport.
-
 
 Section SomeAny.
 
@@ -442,31 +471,32 @@ Definition new (P : atom -> Prop) :=
 
 Notation "\new a , P" := (new (fun a:atom => P))
    (format "\new  a ,  P", at level 200).
-Notation "a # x" := (a \notin support x)
-                      (at level 0).
 
 Theorem some_any (R : atom -> X -> Prop) :
   equivariant_prop R ->
   forall x : X, [/\
       (forall a : atom , a # x -> R a x) -> (\new a, R a x),
-      (\new a, R a x) ->  R (fresh (support x)) x,
-      R (fresh (support x)) x -> (exists2 a, a # x & R a x) &
+      (\new a, R a x) ->  R (fresh_in (support x)) x,
+      R (fresh_in (support x)) x -> (exists2 a, a # x & R a x) &
       (exists2 a, a # x & R a x)
       -> (forall a, a # x -> R a x)
     ].
 Proof.
-move => Requi; split; first by exists (support x).
-  - move => [S aNSR]. 
-    apply/(Requi (swap (fresh (support x)) (fresh ((support x) `|` S)))).
-    rewrite swapL [_ \dot x]fresh_transp ?fresh_notin ?fresh_subsetnotin ?fsubsetUl //.
-    apply/aNSR/fresh_subsetnotin. by rewrite fsubsetUr.
-  - move => Rfresh. exists (fresh (support x)) => //. by apply fresh_notin.
+move => Requi; split. 
+  - exists (support x) => a /fresh_support. exact: (H a).
+  - move => [S aNSR].
+    apply/(Requi (swap (fresh_in x) (fresh_in (x,S)))).
+    rewrite swapL [_ \dot x]fresh_transp; last first. 
+      by admit.      
+      exact: freshP.
+    apply/aNSR. by admit.
+  - move => Rfresh. exists (fresh_in x) => //. exact: freshP.
   - move => [a a_fresh_x rax] a' a'_fresh_x.
     case: (eqVneq a a'); first by move <-.
     move => aa'. 
     rewrite -[a'](tfinpermL a a') -[x](fresh_transp a_fresh_x a'_fresh_x) //. 
-    by apply Requi.
-Qed.
+    by apply/Requi.
+Admitted.
 
 Lemma new_forall (R : atom -> X -> Prop) :
   equivariant_prop R ->
@@ -486,7 +516,7 @@ Qed.
 
 Lemma fresh_new (R : atom -> X -> Prop) :
   equivariant_prop R ->
-  forall x: X, R (fresh (support x)) x <-> \new a, R a x. 
+  forall x: X, R (fresh_in (support x)) x <-> \new a, R a x. 
 Proof.
 move=> Requi x. have [fn nf nh ef] := some_any Requi x. 
 by split => [/nh/ef/fn | /nf]. 
@@ -496,8 +526,7 @@ End SomeAny.
 
 Notation "\new a , P" := (new (fun a:atom => P))
    (format "\new  a ,  P", at level 200).
-Notation "a # x" := (a \notin support x)
-                      (at level 0).
+Notation "a # x" := (fresh a x) (at level 0).
 
 Section NominalRawLambdaTerms.
 
@@ -627,7 +656,7 @@ Fixpoint alpha_rec n t1 t2 :=
       | n, rVar a1, rVar a2 => a1 == a2
       | S n, rApp u v, rApp u' v' => alpha_rec n u u' && alpha_rec n v v'
       | S n, rLambda a u, rLambda a' u' => 
-       let z := fresh (support a `|` support u `|` (support a' `|` support u')) in 
+       let z := fresh_in (a,u,a',u') in 
        alpha_rec n (swap a z \dot u) 
              (swap a' z \dot u')
       |_, _, _ => false
@@ -654,70 +683,10 @@ Proof. by rewrite/alpha /= !alpha_recE // ?leq_maxl ?leq_maxr. Qed.
 
 Lemma alpha_lamE x t y u : 
   alpha (rLambda x t) (rLambda y u) = 
-  let z := fresh (support x `|` support t `|` (support y `|` support u)) in
+  let z := fresh_in (x,t,y,u) in
   alpha (swap x z \dot t) (swap y z \dot u).
 Proof. by rewrite /alpha /= raw_depth_perm. Qed.
 
-Inductive alpha_spec t1 t2 : rawterm -> rawterm -> bool -> Type :=
-  | AlphaVar a & t1 = rVar a & t2 = rVar a: alpha_spec t1 t2 (rVar a) (rVar a) true
-  | AlphaApp u1 v1 u2 v2 & t1 = rApp u1 v1 & t2 = rApp u2 v2 :
-      alpha_spec t1 t2 (rApp u1 v1) (rApp u2 v2) (alpha u1 u2 && alpha v1 v2)
-  | AlphaLam a1 u1 a2 u2 & t1 = rLambda a1 u1 & t2 = rLambda a2 u2 :
-      alpha_spec t1 t2 (rLambda a1 u1) (rLambda a2 u2)
-                 (let b := fresh ([fset a1; a2] `|` support t1 `|` support t2) in
-                            alpha (swap a1 b \dot u1) (swap a2 b \dot u2)).
-
-(* Lemma equi_alpha π : {mono actN π : t1 t2 / alpha t1 t2}.
-Proof.
-move =>t1 t2 /=; rewrite /alpha raw_depth_perm.
-elim: t1 t2 => [x|u v|x u] [y|u' v'|y u'] //=. [a a'|t'1 iht'1 t'2 iht'2 t1|] //;
-rewrite /alpha ?raw_depth_perm.
-  - by apply: (inj_eq (@finperm_inj π)).
-  - move => bla. *)
-(*
-Lemma alphaP t1 t2 : alpha_spec t1 t2 (alpha t1 t2).
-
-Lemma alpha_ind (P : rawterm -> rawterm -> Prop) :
-(forall a : atom, P (rVar a) (rVar a)) ->
-(forall u v u' v' : rawterm, alpha_spec u u' -> P u u' ->
-                             alpha_spec v v' -> P v v' -> 
-                             P (rApp u v) (rApp u' v')) ->
-(forall (x y : atom) u u',
-   (\new z, alpha_spec (swap x z \dot u) (swap y z \dot u')) ->
-   (\new z, P (swap x z \dot u) (swap y z \dot u')) ->
- P (rLambda x u) (rLambda y u')) ->
-forall t t' : rawterm, alpha_spec t t' -> P t t'.
-Proof.
-move=> Pvar Papp Plam t t'.
-move: {-1}(raw_depth t) (leqnn (raw_depth t)) => n.
-elim: n t t' => [|n ihn] t t'.
-  by rewrite leqn0 => /eqP dt att'; case: att' dt.
-rewrite leq_eqVlt => /predU1P [dt att'|/ihn]; last exact.
-case: att' dt => //.
-  move=> u v u' v' auu' avv' /= [duv].
-  by apply: Papp => //; apply: ihn => //; rewrite -duv (leq_maxl, leq_maxr).
-move=> x y u u' auu' [du]; apply: Plam => //.
-case: auu' => S HS; exists S => z zNS.
-apply: ihn. by rewrite raw_depth_perm du. by apply HS.
-Qed.
-*)
-                 
-(* Lemma equi_alpha t t' π : alpha_spec t t' <-> alpha_spec (π \dot t) (π \dot t'). 
-Proof.
-wlog suff : t t' π / alpha_spec t t' -> alpha_spec (π \dot t) (π \dot t') => [hw|].
-  split; first exact: hw.
-  move/(hw (π \dot t) (π \dot t') π^-1). by rewrite -!actM finperm_invP !act1.
-move => /alpha_ind E. elim/E : {t t' E} _ => 
-  [x|u v u' v' uαu' πuαπu' vαv' πvαπv' | x y u u' Hu Hπu].
-  - by constructor.
-  - by  constructor. 
-  - case: Hπu => S HS. constructor. exists (im π S) => z zNS.
-    rewrite -!actM -[z](finpermVK π z) -!tfinperm_conj actM; rewrite actM.
-    apply HS. rewrite -(@mem_im _ _ (@id atom) π S) ?finpermVK //.
-    exact: finperm_inj.                                                
-Qed.
-
-*)
 
 Lemma alpha_equivariant (t t' : rawterm_nominalType) π :
   alpha (π \dot t) (π \dot t') = alpha t t'.
@@ -729,11 +698,11 @@ elim: n t t' π => [|n ihn] [x|u v|x u] [y|u' v'|y u'] π //=;
   rewrite ltnS geq_max => /andP [un vn] //. rewrite (ihn _ _ π)//.
   by rewrite -[_ v v'](ihn _ _ π).
 rewrite ltnS.
-set a' := fresh _. set a := fresh _.
+set a' := fresh_in _. set a := fresh_in _.
 rewrite -[a'](finpermVK π) -!actM -!tfinperm_conj => ru_lt_n. 
 have u_fix : swap a (π^-1 a') \dot u = u.
-  apply/fresh_transp. apply/fresh_subsetnotin/fsubsetU. 
-  rewrite fsubsetU // fsubsetAA orbT //. rewrite mem_im_supp;
+  apply/fresh_transp. by admit.
+  rewrite mem_im_supp.
     last by move => x' π'; apply strong_termsupport.    
   apply fresh_subsetnotin.
   rewrite finperm_invK fsubsetU // fsubsetU // fsubsetAA orbT //. 
@@ -817,115 +786,6 @@ Canonical term_eqQuotType := Eval hnf in [eqQuotType alpha of term].
 (* conflit avec fingroup *)
 Notation repr := generic_quotient.repr.
 
-(* Inductive term := *)
-(*   |BVar : nat ->  term *)
-(*   |FVar : atom -> term *)
-(*   |App : term -> term -> term *)
-(*   |Lambda : term -> term. *)
-
-(* Fixpoint open_rec (k : nat) (u : term) (t : term) {struct t} : term := *)
-(*   match t with *)
-(*     | BVar i => if k == i then u else (BVar i) *)
-(*     | FVar x  => FVar x *)
-(*     | Lambda t  => Lambda (open_rec (k.+1) u t) *)
-(*     | App t1 t2 => App (open_rec k u t1) (open_rec k u t2) *)
-(*   end. *)
-
-(* Definition open t u := open_rec 0 u t. *)
-
-(* Notation "{ k ~> u } t" := (open_rec k u t) (at level 67). *)
-(* Notation "t ^^ u" := (open t u) (at level 67). *)
-(* Notation "t ^ x" := (open t (FVar x)). *)
-
-(* Eval compute in open (App (Lambda (App (BVar 1) (BVar 0))) (BVar 0)) (FVar 7). *)
-
-(* Fixpoint pi (t : rawterm) : term := *)
-(*   let fix aux (l : seq atom) (u : rawterm) := *)
-(*       match u with  *)
-(*         |rVar x => if x \in l then BVar (index x l) else FVar (addn x (size l)) *)
-(*         |rApp t1 t2 => App (aux l t1) (aux l t2) *)
-(*         |rLambda x u' => Lambda (aux (x::l) u') *)
-(*       end *)
-(*         in *)
-(*   aux [::] t. *)
-
-(* Lemma rAppK t1 t2 : pi (rApp t1 t2) = App (pi t1) (pi t2). *)
-(* Proof. by elim: t1; elim: t2 => //. Qed. *)
-
-(* Fixpoint fvars (t : term) : seq atom := *)
-(*   match t with *)
-(*       |BVar x => [::] *)
-(*       |FVar x => [::x] *)
-(*       |App t1 t2 => (fvars t1) ++ (fvars t2) *)
-(*       |Lambda t => fvars t *)
-(*       end. *)
-
-(* Fixpoint depth (t : term) : nat := *)
-(*   match t with *)
-(*       |BVar n => 0 *)
-(*       |FVar x => 0 *)
-(*       |App t1 t2 => (maxn (depth t1) (depth t2)).+1 *)
-(*       |Lambda t => (depth t).+1 *)
-(*   end. *)
-
-(* Fixpoint wf_rec n (t : term) :=  *)
-(*   let z := fresh_list (fvars t) in  *)
-(*       match n, t with *)
-(*         |_, BVar m => false *)
-(*         |_, FVar x => true *)
-(*         |S n, App t1 t2 => (wf_rec n t1) && (wf_rec n t2) *)
-(*         |S n, Lambda t => wf_rec n (t^z) *)
-(*         |_,_ => false *)
-(*       end. *)
-
-(* Definition wf (t : term) := wf_rec (depth t) t. *)
-
-(* Lemma wf_recE n t : (depth t <= n) -> wf_rec n t = wf t. *)
-(* Proof. *)
-(* rewrite /wf; move: {-2}n (leqnn n). *)
-(* elim: n t => //= => [t n|n IH [m|x|t1 t2|t]].  *)
-(*   by rewrite leqn0 => /eqP ->; rewrite leqn0 => /eqP ->. *)
-(* rewrite /=.                *)
-(*   rewrite !ltnS geq_max => lmn /andP [um vm].  *)
-(*   rewrite !ihn // ?(leq_maxl, leq_maxr) ?geq_max *)
-(*              ?(leq_trans um, leq_trans vm) //. *)
-(* rewrite !ltnS => lmn um. by rewrite ihn // ?raw_depth_perm.  *)
-(* Qed. *)
-
-
-
-(* Lemma wf_app t1 t2 : wf (App t1 t2) = (wf t1 && wf t2). *)
-(* Proof. *)
-(* move: {-1}(depth (App t1 t2)) (leqnn (depth (App t1 t2))) => n. *)
-(* elim : n t1 t2 => [t1 t2|n IH t1 t2]. *)
-(*   by rewrite ltn0. *)
-
-
-
-(* Definition wf_term := sig wf. *)
-(* Coercion wf_term_term (t : wf_term) : term := (val t). *)
-
-(* Fixpoint repr (t : wf_term) : rawterm := *)
-(*   let fix aux (t : term) (l : seq atom) (bvars : seq atom) := *)
-(*       match t with  *)
-(*         |BVar x => rVar (nth x bvars x) *)
-(*         |FVar x => rVar x *)
-(*         |App t1 t2 => rApp (aux t1 l bvars) (aux t2 l bvars) *)
-(*         |Lambda t => let x := (fresh_list l) in rLambda x (aux t (x::l) (x::bvars)) *)
-(*       end *)
-(*   in aux t (fvars t) [::]. *)
-
-(* Lemma wf_pi (t : rawterm) : wf (pi t). *)
-(* Proof. *)
-(* elim: t => //. *)
-(*  move => t wft u wfu. rewrite rAppK. rewrite /=. *)
-
-(* Lemma reprK : cancel repr pi. *)
-(* Proof. *)
-(* elim => [a|||].  *)
-(* move => t. *)
-
-    
 Lemma alpha_eqE t t' : alpha t t' = (t == t' %[mod term]).
 Proof. by rewrite piE. Qed.
 
@@ -1042,12 +902,12 @@ Lemma eq_lam x t y u :
   x # (y,u) -> (t = swap x y \dot u) ->
   Lambda x t = Lambda y u.                                                  
 Proof.
-rewrite in_fsetU /= in_fset1 => /norP [x_neq_y x_fresh_t] ->.
+move/(fresh_prod) => [x_fresh_y x_fresh_u t_swap].
 unlock Lambda; apply/eqP; rewrite -alpha_eqE alpha_lamE /= alpha_eqE. 
-set z := fresh _.
+set z := fresh_in _.
 rewrite -!pi_equivariant !reprK.
 have xzu : swap x z \dot u = u.  
-  apply/fresh_transp => //; apply/fresh_subsetnotin.
+  apply/fresh_transp => //. apply/fresh_subsetnotin.
   by rewrite fsetUC fsubsetU // fsubsetUr.
 rewrite -{2}xzu -!actM tfinperm_conj tfinpermL tfinpermNone ?[_ z y]tfinpermC//.
 rewrite fresh_neq; first by rewrite eq_sym x_neq_y.
@@ -1071,6 +931,12 @@ Qed.
 
 Lemma fresh_var x y : x # (Var y) = (x != y).
 Proof. by rewrite /support/= VarK/= in_fset1. Qed.
+
+(* Lemma fresh_app x t1 t2 : x # (App t1 t2) = (x # t1) && (x # t2). *)
+(* Proof.  *)
+(* have [reprt1 [reprt2 [Ht1 Ht2 reprt1t2]]] := AppK t1 t2. *)
+(* rewrite /support /= reprt1t2 /= in_fsetU negb_or. *)
+(* apply/norP.  *)
 
 End NominalTerm.
 
@@ -1125,21 +991,21 @@ Defined.
 (* destruct (repr (Var x)). *)
 (* rewrite VarK. rewrite reprK. *)
 
-Lemma term_altind_subproof (X : nominalType) (P : term -> X -> Prop) :
-  (forall x C, P (Var x) C) ->
-  (forall C t1 t2, (forall D, P t1 D) -> (forall D, P t2 D) -> 
-                   P (App t1 t2) C) ->
-  (forall x t C, x # C -> (forall D, P t D) -> P (Lambda x t) C) ->
-  forall u π C, P (π \dot u) C.
+Lemma term_altind_subproof (X : nominalType) (C : X) (P : term -> Prop) :
+  (forall x, P (Var x)) ->
+  (forall t1 t2, P t1 -> P t2 -> 
+                   P (App t1 t2)) ->
+  (forall x t, x # C -> P t -> P (Lambda x t)) ->
+  forall u π, P (π \dot u).
 Proof.
-move => HVar HApp HLam u.
-elim/term_ind : u => [x π C|t1 t2 IHt1 IHt2 π C|].
+move => HVar HApp HLam.
+elim/term_ind => [x π|t1 t2 IHt1 IHt2 π|].
   - rewrite Var_equiv. by apply HVar.
   - rewrite App_equiv. by apply HApp.
-  - move => x t HPt π C.
+  - move => x t HPt π.
     rewrite Lam_equiv. have [xfreshC | xNfreshC] := boolP ((π \dot x) # C).
       by apply HLam.
-    pose z := fresh (support C `|` support (π \dot x) `|` support (π \dot t)).
+    pose z := fresh_in (support C `|` support (π \dot x) `|` support (π \dot t)).
     suff : (Lambda (π \dot x) (π \dot t)) = 
            (Lambda z (swap (π \dot x) z \dot (π \dot t))).
       move->; apply HLam; [|rewrite -actM; exact: HPt]. 
@@ -1148,15 +1014,15 @@ elim/term_ind : u => [x π C|t1 t2 IHt1 IHt2 π C|].
     apply fresh_subsetnotin. by rewrite -fsetUA fsubsetUr.
 Qed.
 
-Lemma term_altind (X : nominalType) (P : term -> X -> Prop) C :
-  (forall x C, P (Var x) C) ->
-  (forall C t1 t2, (forall D, P t1 D) -> (forall D, P t2 D) -> 
-                   P (App t1 t2) C) ->
-  (forall x t C, x # C -> (forall D, P t D) -> P (Lambda x t) C) ->
-  forall u, P u C.
+Lemma term_altind (X : nominalType) (C : X) (P : term -> Prop) :
+  (forall x, P (Var x)) ->
+  (forall t1 t2, P t1 -> P t2 -> 
+                   P (App t1 t2)) ->
+  (forall x t, x # C -> P t -> P (Lambda x t)) ->
+  forall u, P u.
 Proof. 
 move => HVar HApp HLam u. rewrite -[u]act1 => *. 
-exact: term_altind_subproof. 
+exact: (@term_altind_subproof _ C). 
 Qed.
 
 
@@ -1192,7 +1058,7 @@ case: t1; case: t2 => //.
   by rewrite (IHn u1 t1) // (IHn u2 t2).
 move => x t y u /=.
 rewrite ltnS alpha_lamE /=. 
-set z := fresh _.
+set z := fresh_in _.
 rewrite -(raw_depth_perm (swap y z)) /= => u_n uαt. 
 by rewrite (IHn _ (swap x z \dot t) u_n) ?raw_depth_perm.
 Qed.
@@ -1237,7 +1103,7 @@ Lemma depth_lam x t :
 Proof.
 have [y [u [[S HS]]] repr_xt] := LambdaK x t.
 rewrite /depth repr_xt/=.
-pose z := fresh S.
+pose z := fresh_in S.
 rewrite -(raw_depth_perm (swap y z)).
 rewrite -[X in _ = X.+1](raw_depth_perm (swap x z)).
 apply/eq_S/raw_depthα.
@@ -1260,7 +1126,7 @@ Fixpoint term_altrect_rec n (t : term) :=
     |S n, rApp t1 t2 => f2 (\pi t1) (\pi t2) 
                       (term_altrect_rec n (\pi t1)) 
                       (term_altrect_rec n (\pi t2))
-    |S n, rLambda x u => let z := fresh ((S1 `|` S2 `|` S3) `|` (support x `|` support t)) in 
+    |S n, rLambda x u => let z := fresh_in ((S1 `|` S2 `|` S3) `|` (support x `|` support t)) in 
                          f3 z (\pi ((swap x z) \dot u)) 
                             (term_altrect_rec n (\pi ((swap x z) \dot u)))
     |_,_ => dflt
@@ -1285,7 +1151,7 @@ case_eq (repr t) => // [t1 t2 reprt|x u repru].
   have deptht2 : depth (\pi t2) <= n 
     by rewrite -depth_repr.
   by rewrite !IHm //.
-set z := fresh _.
+set z := fresh_in _.
 rewrite/depth repru /= ltnS => u_leq_n nm.
 have depthu : depth (\pi_(term) u) <= n 
   by rewrite -depth_repr.
@@ -1378,7 +1244,7 @@ case_eq (repr t); case_eq (repr (π \dot t)) => //.
        apply IHn => //. by rewrite depth_u1 leqnn.
     rewrite -{2}(depth_perm _ π). apply IHn => //. by rewrite depth_u2 leqnn.
   - move => y u repr_πt z v repr_t.
-    set a := fresh _; set b := fresh _.
+    set a := fresh_in _; set b := fresh_in _.
     have aNS1 : a \notin S1 by
       apply/fresh_subsetnotin/fsubsetU/orP; left; rewrite -fsetUA fsubsetUl.
     have aNS2 : a \notin S2 by
@@ -1394,7 +1260,7 @@ case_eq (repr t); case_eq (repr (π \dot t)) => //.
     have -> : π \dot (rLambda z v) = rLambda (π \dot z) (π \dot v) by [].
     move => /alpha_lamP [S HS].
     set t1 := \pi_term _; set t2 := \pi_term _.
-    pose m := fresh ((S `|` S1) `|` (S2 `|` S3 ) `|` (support (π \dot v) `|` support u) `|`
+    pose m := fresh_in ((S `|` S1) `|` (S2 `|` S3 ) `|` (support (π \dot v) `|` support u) `|`
                      (support (f3 a t1 (term_altrect t1)) `|`
                      (π^-1 \dot (support (f3 b t2 (term_altrect t2)))))).
     have mNS1 : m \notin S1 by admit.
@@ -1442,7 +1308,7 @@ Lemma f3α x t y u :
 Proof.
 move => xNS1S2S2 yNS1S2S3. 
 unlock Lambda => /eqP. rewrite -alpha_eqE => /alpha_lamP [S HS].
-pose z := fresh (S1 `|` S2 `|` S3 `|` S `|`
+pose z := fresh_in (S1 `|` S2 `|` S3 `|` S `|`
                  support (f3 x t (term_altrect t)) `|`
                  support (f3 y u (term_altrect u))).
 have zNS3 : z \notin S3 by admit.
@@ -1481,11 +1347,11 @@ Proof.
 rewrite in_fsetU in_fsetU => /norP [/norP [xNS1 xNS2]] xNS3.
 have [y [u [[S HS] repr_xt]]] := LambdaK x t.   
 rewrite/term_altrect depth_lam /= repr_xt.
-set a := fresh _. 
+set a := fresh_in _. 
 move: (HS _ (fresh_notin S)) => yzu_xzt.
 have depth_tu : depth t = depth (\pi (swap y a \dot u)).
   rewrite -pi_equivariant depth_perm.
-  rewrite -(depth_perm _ (swap x (fresh S))) -yzu_xzt.
+  rewrite -(depth_perm _ (swap x (fresh_in S))) -yzu_xzt.
   by rewrite -pi_equivariant depth_perm.
 have aNS3 : a \notin S3 by admit.
 rewrite {1}depth_tu.
