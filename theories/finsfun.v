@@ -1,7 +1,7 @@
-From mathcomp.ssreflect 
-Require Import ssreflect ssrbool ssrnat eqtype ssrfun seq.
-From mathcomp.discrete
-Require Import choice  path finset finfun fintype bigop.
+From Ssreflect 
+Require Import ssreflect ssrbool ssrnat eqtype ssrfun seq choice fintype.
+From MathComp
+Require Import path finset finfun bigop.
 Require Import finmap.
 
 Set Implicit Arguments.
@@ -33,7 +33,7 @@ Fact finsfun_subproof (f : finsfun) :
   forall (k : K) (kf : k \in fmap_of_finsfun f), (fmap_of_finsfun f).[kf]%fmap != default k.
 Proof.
 case:f => f f_stable k kf /=.
-exact: (forallP f_stable (SeqSub kf)).
+apply (forallP f_stable (FSetSub kf)).
 Qed.
 
 Definition fun_of_finsfun (f : finsfun) (k : K) :=
@@ -63,13 +63,13 @@ by rewrite finsfun_dflt // ; constructor.
 Qed.
 
 Variables (h : K -> V) (S : {fset K}).
-Definition suppS := FSet [set a : S | h (val a) != default (val a)].
+Definition suppS := [fset a in S | h a != default a].
 Definition fmapS := FinMap [ffun a : suppS => h (val a)].
 
 Fact finsfunS_subproof : [forall k : suppS, fmapS k != default (val k)].
 Proof.
 apply/forallP => a /=; rewrite ffunE.
-by move: (ssvalP a) => /FSetP [ka /=]; rewrite in_set.
+by move: (fsvalP a) => /FSetP [ka /=].
 Qed.
 
 Definition finsfun_of_fun := @FinSFun fmapS finsfunS_subproof.
@@ -79,7 +79,8 @@ Lemma finsfun_of_funE :
 Proof.
 move => H a; symmetry; rewrite /finsfun_of_fun /fun_of_finsfun.
 case: fndP => /= [kf|]; first by rewrite ffunE.
-by apply:contraNeq => /(fun x => (x,x)) [/H a_in_S]; rewrite in_FSet inE.
+apply: contraNeq. move: (H a). rewrite in_fset => ? ?. 
+apply/andP; split; auto.
 Qed.
 
 (* Définition d'une finsfun à partir d'une ffun qui *)
@@ -94,7 +95,7 @@ Definition finsfun_of_can_ffun (T : {fset K}) (g : {ffun T -> V})
 Lemma finsfun_of_can_ffunE (T : {fset K}) (g : {ffun T -> V})
           (can_g : [forall k : T ,  g k != default (val k)])
           (k : K) (kg : k \in T) :
-  (finsfun_of_can_ffun can_g) k = g (SeqSub kg).
+  (finsfun_of_can_ffun can_g) k = g (FSetSub kg).
 Proof. by rewrite/fun_of_finsfun in_fnd. Qed.
 
 Lemma finsfun_injective_inP  (f : finsfun) (T : {fset K}) :
@@ -102,30 +103,11 @@ Lemma finsfun_injective_inP  (f : finsfun) (T : {fset K}) :
 Proof.
 apply: (iffP (@injectiveP _ _ _)) => f_inj a b; last first.
   by rewrite !ffunE => *; apply: val_inj; apply: f_inj => //; apply: valP.
-move=> aT bT eq_ga_gb; suff: (SeqSub aT) = (SeqSub bT) by move=> [].
+move=> aT bT eq_ga_gb; suff: (FSetSub aT) = (FSetSub bT) by move=> [].
 by apply: f_inj; rewrite !ffunE.
 Qed.
 
 End FinSFunDef.
-
-(* à mettre au bon endroit *)
-(* probablement inutile
-Definition fun_of_ffun (S : {fset K}) (f : {ffun S -> V}) : K -> V :=
-  fun k =>
-  if (k \in S =P true) is ReflectT k_in_S then f (SeqSub k_in_S) else (default k).
-
-Lemma in_fun_of_ffun (S : {fset K}) (f : {ffun S -> V}) (k : K) (kf : k \in S) :
-  fun_of_ffun f k = f (SeqSub kf).
-Proof.
-rewrite/fun_of_ffun; case:eqP=> kf'; last by [].
-by apply/f_equal/f_equal/bool_irrelevance.
-Qed.
-
-Lemma out_fun_of_ffun (S : {fset K}) (f : {ffun S -> V}) (k : K) :
-  k \notin S -> fun_of_ffun f k == default k.
-Proof. by move => kS; rewrite/fun_of_ffun; case:eqP => kS' //; rewrite kS' in kS. Qed.
-
-*)
 
 Section FinSFunGeneralTheory.
 
@@ -153,7 +135,7 @@ Implicit Types (f g : finsfun (@id K)).
 (* au moins default idempotent, peut-etre default k \in g -> k \in g *)
 
 Definition finsfun_comp g f :=
-  @finsfun_of_fun _ _ id [fun k : K => g (f k)] (finsupp f :|: finsupp g).
+  @finsfun_of_fun _ _ id [fun k : K => g (f k)] (finsupp f `|` finsupp g).
 
 Notation "g * f" := (finsfun_comp g f) : finsfun_scope.
 
@@ -165,17 +147,17 @@ rewrite [f _]finsfun_dflt //. by rewrite finsfun_dflt.
 Qed.
 
 Definition emptyfun : @fset0 K -> K.
-by move => x; move: (ssvalP x); rewrite in_fset0. Defined.
+by move => x; move: (fsvalP x); rewrite in_fset0. Defined.
 
 Definition emptyffun := finfun emptyfun.
 
 Fact can_emptyffun : [forall k,  emptyffun k != (val k)].
-Proof. by apply/forallP => k; move: (ssvalP k); rewrite in_fset0. Qed.
+Proof. by apply/forallP => k; move: (fsvalP k); rewrite in_fset0. Qed.
 
 Definition finsfun_one := @finsfun_of_can_ffun _ _ (@id K) _ _ can_emptyffun.
 
 Lemma finsfun1 (k : K) : finsfun_one k = k.
-Proof. by case: finsuppP. Qed.
+Proof. case: finsuppP => //. by rewrite in_fset0. Qed.
 
 Lemma finsfun_oneP : left_id finsfun_one finsfun_comp.
 Proof. by move => f; apply/finsfunP => a; rewrite finsfunM /= finsfun1. Qed.
@@ -213,7 +195,7 @@ Lemma injective_finsfun_subproof (g : finsfun (@id K)) :
   equivalent [:: injective g
               ; let S := finsupp g in
                 {in S &, injective g} /\ forall a : S, g (val a) \in S
-              ; exists2 S : {fset K}, (finsupp g \fsubset S)
+              ; exists2 S : {fset K}, (finsupp g `<=` S)
                 & {in S &, injective g} /\ forall a : S, g (val a) \in S].
 Proof.
 split => /= [g_inj|]; last split=> [[g_inj g_st]|[S gS [g_inj g_st]] a b].
@@ -223,7 +205,7 @@ split => /= [g_inj|]; last split=> [[g_inj g_st]|[S gS [g_inj g_st]] a b].
 have Nfinsupp := contra (fsubsetP gS _).
 wlog /andP [aS bNS] : a b / (a \in S) && (b \notin S) => [hwlog|]; last first.
   rewrite (finsfun_dflt (Nfinsupp _ bNS)) => gb_eq_a.
-  by move: bNS; rewrite -gb_eq_a (g_st (SeqSub aS)).
+  by move: bNS; rewrite -gb_eq_a (g_st (FSetSub aS)).
 have [[aS|aNS] [bS|bNS]] := (boolP (a \in S), boolP (b \in S)); first 3 last.
 - by rewrite !finsfun_dflt // ?Nfinsupp.
 - exact: g_inj.
@@ -246,7 +228,7 @@ Qed.
 
 Lemma injective_finsfunP (g : finsfun (@id K)) :
   injective g <->
-  exists2 S : {fset K}, (finsupp g \fsubset S)
+  exists2 S : {fset K}, (finsupp g `<=` S)
   & {in S &, injective g} /\ forall a : S, g (val a) \in S.
 Proof. by have [H1 [H2 H3]]:= injective_finsfun_subproof g; split=> [/H1|]. Qed.
 
@@ -264,7 +246,7 @@ Variables (K V : keyType).
 Implicit Types (f : K -> V) (g : V -> K).
 
 Lemma im_f f (A : {fset K}) (a : K) : a \in A -> f a \in im f A. 
-Proof. move => aA; apply/imfsetP. by exists (SeqSub aA). Qed.
+Proof. move => aA; apply/imfsetP. by exists (FSetSub aA). Qed.
 
 Lemma mem_im f (A : {fset K}) (a : K) : 
   injective f -> (f a \in im f A) = (a \in A).
@@ -276,21 +258,21 @@ Qed.
 Lemma im_id (A : {fset K}) : im id A = A.
 Proof.
 apply/fsetP => a. apply/imfsetP/idP => [[x xA] ->|aA]; first exact: valP.  
-by exists (SeqSub aA).
+by exists (FSetSub aA).
 Qed.
 
 Lemma imM f g A : im (g \o f) A = (im g (im f A)).
 apply/fsetP => a; apply/imfsetP/imfsetP => [ [x xA] ->| [y yfA] ->].
-  have {xA} xA: (val x) \in A by apply valP. by exists (SeqSub (im_f f xA)) =>//.
+  have {xA} xA: (val x) \in A by apply valP. by exists (FSetSub (im_f f xA)) =>//.
 have {yfA} yfA: (val y) \in im f A. by apply valP. 
 move: yfA => /imfsetP [a' a'A] ->. by exists a'.
 Qed.
 
-Lemma im_subset f A B : A \fsubset B -> (im f A) \fsubset (im f B).
+Lemma im_subset f A B : A `<=` B -> (im f A) `<=` (im f B).
 Proof.
 move => /fsubsetP AB. apply/fsubsetP => y /imfsetP [x xA] ->.
 have {xA} xA : (val x) \in A by apply valP.
-apply/imfsetP. by exists (SeqSub (AB (val x) xA)) => //.
+apply/imfsetP. by exists (FSetSub (AB (val x) xA)) => //.
 Qed.
 
 Lemma im_eq1 f f' : f =1 f' -> im f =1 im f'. 

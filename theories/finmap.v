@@ -6,10 +6,10 @@
 (* License to be determined                                              *)
 (*************************************************************************)
 
-From mathcomp.ssreflect
-Require Import ssreflect ssrbool ssrnat eqtype ssrfun seq.
-From mathcomp.discrete
-Require Import choice  path finset finfun fintype bigop.
+From Ssreflect
+Require Import ssreflect ssrbool ssrnat eqtype ssrfun seq choice fintype.
+From MathComp
+Require Import path finset finfun bigop.
 
 (*****************************************************************************)
 (* This file provides a representation of finitely supported maps where      *)
