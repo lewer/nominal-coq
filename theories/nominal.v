@@ -274,6 +274,19 @@ move => π.
 exact: act_id.
 Qed.
 
+Lemma supports_fsetP (A B  : {fset atom}) : reflect (supports A B) (B `<=` A).
+Proof.
+apply: (iffP idP) =>[/fsubsetP B_sub_A π fix_A|A_supp_B].
+  apply ssatomact_id => b /B_sub_A. exact: (fix_A b).
+apply/fsubsetP => a aB.
+apply contraT => aNA.
+have a_fAB : swap a (fresh_in (A, B)) \dot B = B.
+  apply A_supp_B => b bA. apply/tfinpermNone/andP. split.
+    admit. admit.
+have : fresh_in (A, B) \in B.
+  by rewrite -(tfinpermL a (fresh_in (A, B))) -{2}a_fAB mem_imperm.
+Admitted.
+    
 Lemma supportsI (X : nominalType) (A B : {fset atom}) (x : X) : 
   supports A x -> supports B x -> supports (A `&` B) x. 
 Proof.
@@ -289,7 +302,7 @@ Lemma fresh_notin (A : {fset atom}) : (fresh_in A) \notin A.
 Proof.
 Admitted.
 
-Lemma freshP X (x : X) : (fresh_in x) # x.
+Lemma fresh1P X (x : X) : (fresh_in x) # x.
 Proof.
 exists (support x).
 split.
@@ -297,10 +310,25 @@ split.
 exact: supportsP.
 Qed.
 
-Lemma fresh_subsetnotin (A B: {fset atom}) : A `<=` B -> (fresh_in B) \notin A. 
+Lemma fresh_atomP x y : reflect (x # y) (x != y). 
 Proof.
-move => /fsubsetP AinclB. have: (fresh_in B) \notin B by exact: fresh_notin.
-by apply/contra/AinclB.
+apply: (iffP idP) => [xNy| [S] [xNS S_supp_y]].
+  exists [fset y]. rewrite in_fset1. split => //.
+  move => π /(_ y) /(_ (fset11 y)). by rewrite atomactE.
+apply/negP => /eqP x_eq_y.
+rewrite -x_eq_y in S_supp_y.
+have : forall a, a \notin S -> a = x.
+  move => a aNS. rewrite -(tfinpermR a x). apply S_supp_y => b bS.
+    apply tfinpermNone. by admit.
+have freshxSNS : (fresh_in (x, S)) \notin S by admit.  
+move/(_ (fresh_in (x, S))) /(_ freshxSNS). by admit.
+Admitted.
+
+Lemma fresh_fsetP (A : {fset atom}) x : reflect (x # A) (x \notin A).
+Proof.
+apply: (iffP idP) => [xNA|[S] [xNS /supports_fsetP /fsubsetP S_supp_A ]].
+  exists A. split => //. exact: supportsP.
+exact: (contra (S_supp_A x)).
 Qed.
 
 Lemma fresh_support X a (x : X) : a \notin (support x) -> a # x.
@@ -309,21 +337,6 @@ move => aNx. exists (support x).
 split => //.
 exact: supportsP.
 Qed.
-
-Lemma fresh_atom x y : (x # y) <-> (x != y). 
-Proof.
-split => [[S] [xNS S_supp_y]|].
-  apply/negP => /eqP x_eq_y.
-  rewrite -x_eq_y in S_supp_y.
-  have : forall a, a \notin S -> a = x.
-    move => a aNS. rewrite -(tfinpermR a x). apply S_supp_y => b bS.
-    apply tfinpermNone. by admit.
-  have freshxSNS : (fresh_in (x, S)) \notin S by admit.  
-  move/(_ (fresh_in (x, S))) /(_ freshxSNS). by admit.
-move => xNy.
-exists [fset y]. rewrite in_fset1. split => //.
-move => π /(_ y) /(_ (fset11 y)). by rewrite atomactE.
-Admitted.
 
 Lemma fresh_neq (A : {fset atom}) a : a \in A -> a != fresh_in A.
 Proof. apply contraL => /eqP ->. exact: fresh_notin. Qed.
@@ -336,10 +349,10 @@ split; exists S; split => //; move => π /(supp_S_xy π); rewrite prodactE.
 by move/(congr1 snd).
 Qed.
 
-Lemma fresh_transp (X : nominalType) (a b : atom) (x : X) :
-      a # x -> b # x -> swap a b \dot x = x.
+Lemma fresh_transp (X : nominalType) (a b : atom) (x : X) 
+      {aFx: a # x} {bFx : b # x} : swap a b \dot x = x.
 Proof.
-move => [Sa [aNSa supp_Sa_x]] [Sb [bNSb supp_Sb_x]]. 
+case: aFx bFx => [Sa [aNSa supp_Sa_x]] [Sb [bNSb supp_Sb_x]]. 
 have supp_SaISb_x : supports (Sa `&` Sb) x by apply: supportsI.
 apply supp_SaISb_x => c. rewrite in_fsetI => /andP [cSa cSb].
 have aNc : c != a.
@@ -373,7 +386,23 @@ rewrite finsfunM /= finsfunM /= HƔ.
 by rewrite mem_imperm.
 Qed.
 
+Class is_fresh (X Y : nominalType) (t : X) (y : Y) :=
+  fresh_proof : (fresh_in t) # y.
+
+Global Instance fresh_in_fresh (X : nominalType) (x : X) : is_fresh x x :=
+  {fresh_proof := fresh1P x }.
+
+Global Instance fresh_prod_left (X Y Z : nominalType) (x : X) (y : Y) (z : Z)
+       (H : is_fresh z (x,y)) : is_fresh z x.
+Proof. by apply (fresh_prod H). Qed.
+
+Global Instance fresh_prod_right (X Y Z : nominalType) (x : X) (y : Y) (z : Z)
+       (H : is_fresh z (x,y)) : is_fresh z y.
+Proof. by apply (fresh_prod H). Qed.
+
 End Freshness.
+
+Hint Mode is_fresh + + + + : typeclass_instances.
 
 Notation "a # x" := (fresh a x) (at level 0).
 
@@ -483,7 +512,7 @@ Section SomeAny.
 Variables (X : nominalType).
 
 Definition new (P : atom -> Prop) :=
-  exists A : {fset atom}, forall a, a \notin A -> P a.
+  exists A : {fset atom}, forall a, a # A -> P a.
 
 Notation "\new a , P" := (new (fun a:atom => P))
    (format "\new  a ,  P", at level 200).
@@ -499,18 +528,14 @@ Theorem some_any (R : atom -> X -> Prop) :
     ].
 Proof.
 move => Requi; split. 
-  - exists (support x) => a /fresh_support. exact: (H a).
+  - exists (support x) => a /fresh_fsetP/fresh_support. exact: (H a).
   - move => [S aNSR].
     apply/(Requi (swap (fresh_in x) (fresh_in (x,S)))).
-    rewrite swapL [_ \dot x]fresh_transp; last first. 
-      by admit.      
-      exact: freshP.
-    apply/aNSR. by admit.
-  - move => Rfresh. exists (fresh_in x) => //. exact: freshP.
+    rewrite swapL [_ \dot x]fresh_transp.
+    apply/aNSR. admit. admit. admit.
+  - move => Rfresh. exists (fresh_in x) => //. exact: fresh1P.
   - move => [a a_fresh_x rax] a' a'_fresh_x.
-    case: (eqVneq a a'); first by move <-.
-    move => aa'. 
-    rewrite -[a'](tfinpermL a a') -[x](fresh_transp a_fresh_x a'_fresh_x) //. 
+    rewrite -[a'](tfinpermL a a') -[x](@fresh_transp _ a a') //. 
     by apply/Requi.
 Admitted.
 
@@ -776,8 +801,8 @@ elim: n t u v => [|n ihn] [x|t1 u1|x t] [y|t2 u2|y u] [z|t3 u3|z v]//=;
   by apply (ihn _ u2).
 rewrite ltnS => t_lt_n.
 move => /alpha_lamP [S HS] /alpha_lamP [S' HS'].
-apply/alpha_lamP. exists (S `|` S') => a.
-rewrite in_fsetU => /norP [aNS aNS'].
+apply/alpha_lamP. exists (S `|` S') => a /fresh_fsetP.
+rewrite in_fsetU negb_or => /andP [/fresh_fsetP aFs /fresh_fsetP aFS'].
 apply (ihn _ (swap y a \dot u)); first by rewrite raw_depth_perm.
   exact: HS.
 exact: HS'.
@@ -1132,8 +1157,8 @@ rewrite -(raw_depth_perm (swap y z)).
 rewrite -[X in _ = X.+1](raw_depth_perm (swap x z)).
 apply/eq_S/raw_depthα.
 rewrite alpha_eqE -[X in _ == X]pi_equivariant reprK.
-apply/eqP. exact: (HS z (fresh_notin S)).
-Qed.
+apply/eqP/(HS z).
+Admitted.
 
 Lemma depth_repr (t : rawterm) :
   raw_depth t = depth (\pi t).
@@ -1295,13 +1320,13 @@ case_eq (repr t); case_eq (repr (π \dot t)) => //.
     rewrite swapL IHn; last first.
       admit. admit. admit. admit.
     suff : π \dot swap a m \dot t1 = swap b (π m) \dot t2 by move ->. 
-    have πmNS : π m \notin S by admit.
+    have πmFS : (π m) # S by admit.
     rewrite/t1/t2 -!pi_equivariant.
     rewrite -[swap _ _ \dot _]actM tfinperm_conj tfinpermL tfinpermNone;
       last by admit.
     rewrite actM [swap a m \dot _]fresh_transp; last first.
       admit. admit. 
-    move : (HS _ πmNS). rewrite alpha_eqE -!pi_equivariant => /eqP. 
+    move : (HS _ πmFS). rewrite alpha_eqE -!pi_equivariant => /eqP. 
     rewrite -!actM tfinperm_conj => <-. 
     rewrite tfinperm_conj tfinpermL tfinpermNone; last by admit.
     by  rewrite actM [swap b _ \dot _]fresh_transp; last first;
@@ -1330,7 +1355,7 @@ have <- : (f3 z ((swap y z) \dot u) ((swap y z) \dot (term_altrect u))) = (f3 y 
 rewrite !term_altrect_equivariant;
   try (apply/fdisjointP; admit).
 suff : swap x z \dot t = swap y z \dot u by move ->.
-have zNS : z \notin S by admit. 
+have zNS : z # S by admit. 
 move : (HS _ zNS). 
 by rewrite alpha_eqE -!pi_equivariant !reprK => /eqP.
 Admitted.
@@ -1343,12 +1368,12 @@ move => X_fresh_S1S2S3.
 have [y [u [[S HS] repr_xt]]] := LambdaK x t.   
 rewrite/term_altrect depth_lam /= repr_xt.
 set a := fresh_in _. 
-move: (HS _ (fresh_notin S)) => yzu_xzt.
+move: (HS _ (fresh1P S)) => yzu_xzt.
 have depth_tu : depth t = depth (\pi (swap y a \dot u)).
   rewrite -pi_equivariant depth_perm.
   rewrite -(depth_perm _ (swap x (fresh_in S))) -yzu_xzt.
   by rewrite -pi_equivariant depth_perm.
-have aNS3 : a \notin S3 by admit.
+have aFS3 : a # S3 by admit.
 rewrite {1}depth_tu.
 apply f3α => //. admit. 
 rewrite (@eq_lam a _ y (\pi u)).
