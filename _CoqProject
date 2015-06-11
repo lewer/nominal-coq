@@ -1,6 +1,6 @@
--R . Nominal
+-R theories Nominal
 theories/finmap.v
 theories/finsfun.v
-theories/quotlambda_new.v
-theories/quotlambda.v
-theories/bigenough.v
+theories/finperm.v
+theories/nominal.v
+theories/untyped_lambda_calculus.v
