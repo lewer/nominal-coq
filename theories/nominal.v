@@ -274,6 +274,22 @@ move => π.
 exact: act_id.
 Qed.
 
+Lemma in_le_max x (A : {fset atom}) : x \in A -> x <= max A.
+Proof.
+Admitted.
+
+Lemma fresh_notin (A : {fset atom}) : (fresh_in A) \notin A.
+Proof.
+  rewrite /fresh_in /support /=.
+  have bounded: forall x, x \in A -> x != (max A).+1.
+  move=> x xinA. rewrite neq_ltn. apply/orP.
+  apply: or_introl. by apply: in_le_max.
+  apply/memPn; apply: bounded.
+Qed.
+
+Lemma fresh_neq (A : {fset atom}) a : a \in A -> a != fresh_in A.
+Proof. apply contraL => /eqP ->. exact: fresh_notin. Qed.
+
 Lemma supports_fsetP (A B  : {fset atom}) : reflect (supports A B) (B `<=` A).
 Proof.
 apply: (iffP idP) =>[/fsubsetP B_sub_A π fix_A|A_supp_B].
@@ -281,8 +297,8 @@ apply: (iffP idP) =>[/fsubsetP B_sub_A π fix_A|A_supp_B].
 apply/fsubsetP => a aB.
 apply contraT => aNA.
 have a_fAB : swap a (fresh_in (A, B)) \dot B = B.
-  apply A_supp_B => b bA. apply/tfinpermNone/andP. split.
-    admit. admit.
+apply A_supp_B => b bA. apply/tfinpermNone/andP. split.
+   admit. apply: fresh_neq. simpl. admit.
 have : fresh_in (A, B) \in B.
   by rewrite -(tfinpermL a (fresh_in (A, B))) -{2}a_fAB mem_imperm.
 Admitted.
@@ -296,11 +312,7 @@ Admitted.
 
 Definition fresh X a (x : X) := exists (S : {fset atom}), a \notin S /\ supports S x. 
 
-Notation "a # x" := (fresh a x) (at level 0).
-
-Lemma fresh_notin (A : {fset atom}) : (fresh_in A) \notin A.
-Proof.
-Admitted.
+Notation "a # x" := (fresh a x) (x at level 60, at level 60).
 
 Lemma fresh1P X (x : X) : (fresh_in x) # x.
 Proof.
@@ -363,9 +375,6 @@ move => aNx. exists (support x).
 split => //.
 exact: supportsP.
 Qed.
-
-Lemma fresh_neq (A : {fset atom}) a : a \in A -> a != fresh_in A.
-Proof. apply contraL => /eqP ->. exact: fresh_notin. Qed.
 
 Lemma fresh_transp (X : nominalType) (a b : atom) (x : X) 
       {aFx: a # x} {bFx : b # x} : swap a b \dot x = x.
@@ -430,7 +439,7 @@ End Freshness.
 
 Hint Mode is_fresh + + + + : typeclass_instances.
 
-Notation "a # x" := (fresh a x) (at level 0).
+Notation "a # x" := (fresh a x) (x at level 60, at level 60).
 
 Section EquivariantFunctions.
 
@@ -593,7 +602,7 @@ End SomeAny.
 
 Notation "\new a , P" := (new (fun a:atom => P))
    (format "\new  a ,  P", at level 200).
-Notation "a # x" := (fresh a x) (at level 0).
+Notation "a # x" := (fresh a x) (x at level 60, at level 60).
 
 Section NominalRawLambdaTerms.
 

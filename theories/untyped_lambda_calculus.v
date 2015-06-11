@@ -1,6 +1,5 @@
 From Ssreflect
 Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
-
 From MathComp
 Require Import bigop  finfun finset generic_quotient perm tuple fingroup.
 From Nominal
@@ -80,7 +79,7 @@ End SubstDef.
 
 Notation " t { x := u } " := (subst x u t) (at level 0).
 
-Lemma forget x u t : x # u -> u{x:=t} = u.
+Lemma forget x u t : x # u -> u{x := t} = u.
 Proof.
 
 (* induction sur u, en précisant que dans le cas Lambda y v, *)
@@ -90,7 +89,7 @@ elim/(@term_altind _ (x, t)): u => [y |t1 t2 IHt1 IHt2|y v yFxt IHt].
   - move/fresh_varP => /negPf x_neq_y. by rewrite subst_VarE x_neq_y.
   - move/fresh_app => [xFt1 xFt2]. 
     rewrite subst_AppE. by rewrite IHt1 // IHt2 //.
-  - have xFy : x # y by admit.
+  - have xFy : x # y. by admit.
     move/fresh_lam /(_ xFy) => H. by rewrite subst_LamE // IHt.
 Admitted.
 
