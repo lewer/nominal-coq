@@ -421,25 +421,61 @@ apply supp_SS'_x => b. rewrite in_fsetI => /andP [bS bS'].
 apply/fix_Sa/fsetD1P. split => //.
 Admitted.
 
-Class is_fresh (X Y : nominalType) (t : X) (y : Y) :=
-  fresh_proof : (fresh_in t) # y.
+Class is_fresh (X : nominalType) (a : atom) (x : X) :=
+  fresh_proof : a # x.
 
-Global Instance fresh_in_fresh (X : nominalType) (x : X) : is_fresh x x :=
+Global Instance fresh_in_fresh (X : nominalType) (x : X) : is_fresh (fresh_in x) x :=
   {fresh_proof := fresh1P x }.
 
-(* Global Instance fresh_prod_left (X Y Z : nominalType) (x : X) (y : Y) (z : Z) *)
-(*        (H : is_fresh z (x,y)) : is_fresh z x. *)
-(* Proof. apply fresh_prod. *)
+Global Instance fresh_prod_left (X Y : nominalType) (x : X) (y : Y) (a : atom)
+       (H : is_fresh a (x,y)) : is_fresh a x.
+Proof.
+apply (@proj1 _ (a # y)). apply fresh_prod.
+exact H.
+Qed.
 
-(* Global Instance fresh_prod_right (X Y Z : nominalType) (x : X) (y : Y) (z : Z) *)
-(*        (H : is_fresh z (x,y)) : is_fresh z y. *)
-(* Proof. by apply (fresh_prod H). Qed. *)
+Global Instance fresh_prod_right (X Y : nominalType) (x : X) (y : Y) (a : atom)
+       (H : is_fresh a (x,y)) : is_fresh a y.
+Proof.
+apply (@proj2 (a # x) _). apply fresh_prod.
+exact H.
+Qed.
 
 End Freshness.
 
-Hint Mode is_fresh + + + + : typeclass_instances.
+Hint Mode is_fresh + + + : typeclass_instances.
 
-Notation "a # x" := (fresh a x) (x at level 60, at level 60).
+Notation "a # x" := (is_fresh a x) (x at level 60, at level 60).
+
+Lemma fresh_transp2 (X : nominalType) (a b : atom) (x : X) 
+      {aFx: a # x} {bFx : b # x} : swap a b \dot x = x.
+Proof.
+case: aFx bFx => [Sa [aNSa supp_Sa_x]] [Sb [bNSb supp_Sb_x]]. 
+have supp_SaISb_x : supports (Sa `&` Sb) x by apply: supportsI.
+apply supp_SaISb_x => c. rewrite in_fsetI => /andP [cSa cSb].
+have aNc : c != a.
+  apply/negP => /eqP a_eq_c. move: cSa aNSa.
+  by rewrite a_eq_c => ->. 
+have bNc : c != b.
+  apply/negP => /eqP b_eq_c. move: cSb bNSb.
+  by rewrite b_eq_c => ->.
+apply tfinpermNone. 
+by rewrite aNc bNc.
+Qed.
+
+
+(* ça marche *)
+Goal swap (fresh_in 3) (fresh_in 3) \dot 3 = 3.
+Proof. exact: fresh_transp2. Qed.
+
+(* ça marche pas *)
+Goal swap (fresh_in 3) (fresh_in (3,4)) \dot 3 = 3.
+Proof. apply fresh_transp2. 
+(* Error: *)
+(* Unable to satisfy the following constraints: *)
+
+(* ?Goal : "swap (fresh_in 3) (fresh_in (3, 4)) \dot 3 = 3" *)
+(* ?bFx : "fresh_in (3, 4) # 3" *)       
 
 Section EquivariantFunctions.
 
