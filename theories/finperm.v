@@ -16,12 +16,18 @@ Local Open Scope quotient_scope.
 
 Definition atom := nat.
 
+Import Key.Exports.
+
 Section FinPermDef.
 
+Variable (K : keyType).
+
 Record finPerm := FinPerm {
-  perm_of :> finsfun (@id atom);
+  perm_of :> finsfun (@id K);
   _ : injectiveb_finsfun_id  perm_of
 }.
+
+Definition finperm_of (_ : phant K) := finPerm.
 
 Lemma finperm_inj (π : finPerm) : injective π.
 Proof. by case:π => *; apply/injectiveb_finsfunP. Qed.
@@ -33,15 +39,15 @@ move=> /andP [/finsfun_injective_inP f_inj_in /forallP f_stable].
 by case: (finsuppP _ a) => [/negPf -> //|af]; apply: (f_stable (FSetSub af)).
 Qed.
 
-Lemma perm_stable (π : finPerm) (S : {fset atom}) :
-  finsupp π `<=` S -> forall (a : atom), a \in S -> π a \in S. 
+Lemma perm_stable (π : finPerm) (S : {fset K}) :
+  finsupp π `<=` S -> forall (a : K), a \in S -> π a \in S. 
 Proof.
 move=> /fsubsetP S_surfinsupp a; case:finsuppP; first by []. 
 by move => a_supp aS; apply/S_surfinsupp/(monoW (@in_permsupp _)).
 Qed.
 
 Definition eq_finPerm (π π' : finPerm) :=
-    [forall a: (finsupp π `|` finsupp π'), π (val a) == π' (val a) :> nat].
+    [forall a: (finsupp π `|` finsupp π'), π (val a) == π' (val a)].
 
 Lemma eq1_finPermP (π π' : finPerm) : reflect (π =1 π') (eq_finPerm π π').
 Proof.
@@ -73,30 +79,33 @@ move=> /eq1_finPermP pq /eq1_finPermP qr.
 by apply/eq1_finPermP => n; rewrite pq qr.
 Qed.
 
-
 End FinPermDef.
+
+Notation "{finperm K }" := (@finperm_of _ (Phant K)) : type_scope.
 
 Section PermFinPerm.
 
-Definition ffun_of_finPerm (π : finPerm) (S : {fset atom}) 
+Variable (K : keyType).
+
+Definition ffun_of_finPerm (π : {finperm K}) (S : {fset K}) 
            (supp_incl_S : finsupp π `<=` S) := 
   [ffun x:S => FSetSub (perm_stable supp_incl_S (fsvalP x))].
 
-Fact perm_of_finPerm_subproof (π : finPerm) (S : {fset atom}) 
+Fact perm_of_finPerm_subproof (π : {finperm K}) (S : {fset K}) 
       (supp_incl_S : finsupp π `<=` S) : injectiveb (ffun_of_finPerm supp_incl_S). 
 Proof.
 apply/injectiveP => a b; rewrite !ffunE; move/(congr1 val) => πa_eq_πb. 
 by apply/val_inj/(finperm_inj πa_eq_πb).
 Qed.
 
-Definition perm_of_finPerm (π : finPerm) (S : {fset atom}) 
+Definition perm_of_finPerm (π : {finperm K}) (S : {fset K}) 
            (supp_incl_S : finsupp π `<=` S) := 
   Perm (perm_of_finPerm_subproof supp_incl_S).
 
-Definition can_perm_of_finPerm (π : finPerm) := 
+Definition can_perm_of_finPerm (π : {finperm K}) := 
   perm_of_finPerm (fsubsetAA (finsupp π)).
 
-Lemma perm_of_finPermE (π : finPerm) (S : {fset atom}) 
+Lemma perm_of_finPermE (π : {finperm K}) (S : {fset K}) 
       (supp_incl_S : finsupp π `<=` S) :
   forall a : S, perm_of_finPerm supp_incl_S a = FSetSub (perm_stable supp_incl_S (fsvalP a)).
 Proof. move => a. by rewrite/perm_of_finPerm -pvalE /ffun_of_finPerm /= ffunE. Qed.
@@ -105,19 +114,21 @@ End PermFinPerm.
 
 Section FinPermSpec.
 
-Lemma finPerm_can (π : finPerm) (a : atom) (aπ : a\in finsupp π) :
+Variable (K : keyType).
+  
+Lemma finPerm_can (π : {finperm K}) (a : K) (aπ : a \in finsupp π) :
   π a = (val (can_perm_of_finPerm π (FSetSub aπ))).
 Proof.
-have t : π a = val (SeqSub (perm_stable (fsubsetAA (finsupp π)) aπ)) by []. 
+have t : π a = val (FSetSub (perm_stable (fsubsetAA (finsupp π)) aπ)) by []. 
 by rewrite t perm_of_finPermE. 
 Qed.
 
-CoInductive finPerm_spec (π : finPerm) (a : atom) : atom -> bool -> Type :=
+CoInductive finPerm_spec (π : {finperm K}) (a : K) : K -> bool -> Type :=
   | FinPermOut : a \notin finsupp π -> finPerm_spec π a a false
   | FinPermIn  (aπ : a \in finsupp π) : 
       finPerm_spec π a (val (can_perm_of_finPerm π (FSetSub aπ))) true.
 
-Lemma finPermP (π : finPerm) (a : atom) : finPerm_spec π a (π a) (a \in finsupp π).
+Lemma finPermP (π : {finperm K}) (a : K) : finPerm_spec π a (π a) (a \in finsupp π).
 Proof.
 case:finsuppP; first by exact: FinPermOut.
 move => aπ. suff: π a = (val (can_perm_of_finPerm π (FSetSub aπ))).
@@ -129,7 +140,7 @@ End FinPermSpec.
 
 Section FinPermInvDef.
 
-Variable (π : finPerm).
+Variables (K : keyType) (π : {finperm K}).
 
 Let p := can_perm_of_finPerm π.
 Let inv_p_ffun := [ffun a : finsupp π => val ( p^-1%g a)].
@@ -141,7 +152,7 @@ rewrite (can2_eq (permKV p) (permK p)).
 rewrite perm_of_finPermE eq_sym -mem_finsupp. exact: fsvalP.
 Qed.
 
-Definition finsfun_invp_subproof := @finsfun_of_can_ffun _ _ (@id atom) _ _ can_p_subproof.
+Definition finsfun_invp_subproof := @finsfun_of_can_ffun _ _ (@id K) _ _ can_p_subproof.
 
 Fact injective_finsfun_subproof : injectiveb_finsfun_id finsfun_invp_subproof.
 Proof.
@@ -159,7 +170,7 @@ Qed.
 Definition finperm_inv := 
   FinPerm injective_finsfun_subproof.
 
-Lemma finperm_one_subproof : injectiveb_finsfun_id (@finsfun_one nat_KeyType).
+Lemma finperm_one_subproof : injectiveb_finsfun_id (@finsfun_one K).
 Proof. by apply/injectiveb_finsfunP/inj_finsfun_one. Qed.
 
 Definition finperm_one := FinPerm finperm_one_subproof.
@@ -168,24 +179,28 @@ End FinPermInvDef.
 
 Section FinPermMulDef.
 
-Lemma finperm_mul_subproof (π π' : finPerm) :
-  injectiveb_finsfun_id (@finsfun_comp nat_KeyType π π').
+Variable (K : keyType).
+
+Lemma finperm_mul_subproof (π π' : {finperm K}) :
+  injectiveb_finsfun_id (@finsfun_comp _ π π').
 Proof. apply/injectiveb_finsfunP/inj_finsfun_comp; by apply finperm_inj. Qed.
 
-Definition finperm_mul (π π' : finPerm) :=
+Definition finperm_mul (π π' : {finperm K}) :=
   FinPerm (finperm_mul_subproof π π').
 
 End FinPermMulDef.
 
-Notation "1" := finperm_one.
-Notation "π * π'" := (finperm_mul π π').
-Notation "π ^-1" := (finperm_inv π) : finperm_scope.
-Notation "π ~" := (can_perm_of_finPerm π) 
+Notation "1" := (finperm_one).
+Notation "π * π'" := (@finperm_mul _ π π').
+Notation "π ^-1" := (@finperm_inv _ π) : finperm_scope.
+Notation "π ~" := (@can_perm_of_finPerm _ π) 
   (at level 0) : finperm_scope.  
 
 Section FinPermTheory.
 
-Implicit Types (π : finPerm) (a : atom).
+Variable (K : keyType).
+  
+Implicit Types (π : {finperm K}) (a : K).
 
 Lemma can_inv π : π^-1~ = π~^-1%g.
 Proof.
@@ -195,7 +210,7 @@ suff : {| fsval := fsval a; fsvalP := fsvalP a |} = a by move ->.
 by apply val_inj.
 Qed.
 
-Lemma finperm_invK : involutive finperm_inv.
+Lemma finperm_invK : involutive (@finperm_inv K).
 Proof.
 move => π. apply/eq_finPermP/eq1_finPermP/forallP. 
 rewrite fsetUid => a. rewrite !finPerm_can; do ?apply: valP.
@@ -204,7 +219,7 @@ suff : ainvinvπ = aπ by move ->.
 exact: bool_irrelevance.
 Qed.
 
-Lemma myvalK  (S : {fset atom}) (a : S) aS :
+Lemma myvalK  (S : {fset K}) (a : S) aS :
   {| fsval := val a;
      fsvalP := aS |} = a.
 Proof. by apply val_inj. Qed.
@@ -222,19 +237,19 @@ Qed.
 Lemma finpermVK π : cancel π^-1 π.
 Proof. by move=> a; rewrite -{1}[π]finperm_invK finpermK. Qed.
 
-Lemma finperm_invP : left_inverse finperm_one finperm_inv finperm_mul.
+Lemma finperm_invP : left_inverse (1 K) (@finperm_inv K) (@finperm_mul K).
 Proof.
 move => π. apply/eq_finPermP => a. 
 by rewrite finsfunM /= finpermK finsfun1. 
 Qed.
 
-Lemma finperm_oneP : left_id 1 finperm_mul.
+Lemma finperm_oneP : left_id (1 K) (@finperm_mul K).
 Proof. move => π. apply/eq_finPermP => a. by rewrite finsfunM /= finsfun1. Qed.
 
-Lemma finperm_invVP : right_inverse finperm_one finperm_inv finperm_mul.
+Lemma finperm_invVP : right_inverse (1 K) (@finperm_inv K) (@finperm_mul K).
 Proof. move => π. by rewrite -(finperm_invP π^-1) finperm_invK. Qed.
 
-Lemma finperm_mulA : associative finperm_mul.
+Lemma finperm_mulA : associative (@finperm_mul K).
 Proof. 
 move => π1 π2 π3. apply/eq_finPermP => a /=. by rewrite !finsfunM /= !finsfunM. 
 Qed.
@@ -246,14 +261,16 @@ End FinPermTheory.
 
 Section Transpositions.
 
-Implicit Types (a b c : atom).
+Variable (K : keyType).  
+  
+Implicit Types (a b c : K).
 
 Local Notation transp a b := [fun z => z with a |-> b, b |-> a].               
 
 Definition tfinsfun a b := 
-  @finsfun_of_fun _ _ (@id atom) [fun z => z with a |-> b, b |-> a] [fset a;b].
+  @finsfun_of_fun _ _ (@id K) [fun z => z with a |-> b, b |-> a] [fset a;b].
 
-CoInductive tfinperm_spec a b c : atom -> Type :=
+CoInductive tfinperm_spec a b c : K -> Type :=
   | TFinpermFirst of c = a : tfinperm_spec a b c b
   | TFinpermSecond of c = b : tfinperm_spec a b c a
   | TFinpermNone of (c != a) && (c != b) : tfinperm_spec a b c c.
@@ -304,14 +321,14 @@ Qed.
 
 
 Lemma tfinsfun_id a :
-  tfinsfun a a = 1.
+  tfinsfun a a = (1 K).
 Proof.
 apply/finsfunP => b; rewrite finsfun1.
 by case: tfinpermP; symmetry.
 Qed.
 
 Lemma tfinperm_idempotent a b :
-  (tfinperm a b) * (tfinperm a b) = 1.
+  (tfinperm a b) * (tfinperm a b) = (1 K).
 Proof.
 apply/eq_finPermP => c.
 rewrite finsfunM finsfun1 /=.
@@ -323,7 +340,7 @@ case: tfinpermP; case: tfinpermP;
   - by rewrite eqxx => _ /andP [? ?]. 
 Qed.
 
-Lemma tfinperm_conj a a' (π : finPerm) :
+Lemma tfinperm_conj a a' (π : {finperm K}) :
   π * (tfinperm a a') = tfinperm (π a) (π a') * π.
 Proof.
 apply/eq_finPermP => b. rewrite !finsfunM /=.
