@@ -2289,3 +2289,29 @@ by have [->|//] := altP eqP; rewrite fnd_rem in_fsetE eqxx.
 Qed.
 
 End FinMapKeyType.
+
+Section LemmesGabriel.
+
+Variable (K : keyType).
+
+Definition fsetU_list l := foldr (@fsetU K) fset0 l.
+
+Lemma fsetU_listP (l : seq {fset K}) x : 
+  reflect (exists2 t, t \in l & x \in t) (x \in fsetU_list l).
+Proof.
+apply: (iffP idP); elim: l.
+  - by rewrite in_fset0.
+  - move => S l IHl /=.
+    rewrite in_fsetU => /orP. case => [xS|].
+      exists S; [exact: mem_head|by []].
+    move/IHl => [t] t_l x_t. exists t => //.
+    by rewrite in_cons t_l orbT.
+  - move => [?]. by rewrite in_nil.
+  - move => S l IHl [t].
+    rewrite in_cons /= => /orP. case.
+      move => /eqP ->. by rewrite in_fsetU => ->.
+    move => t_l x_t. apply/fsetUP; right.
+    apply IHl. by exists t.
+Qed.
+
+End LemmesGabriel.
