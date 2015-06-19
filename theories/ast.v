@@ -153,3 +153,13 @@ Canonical rAST_nominalType (node_label : Type) (leaf_type : nominalType atom) :=
   @NominalType atom
     (@rAST_choiceType node_label leaf_type) 
     (@rAST_nominal_mixin node_label leaf_type).
+
+Record AST_Instance := 
+  ASTInstance {
+      X : Type;
+      node_label : Type;
+      leaf_type : nominalType atom;
+      encode : X -> rAST node_label leaf_type;
+      decode : rAST node_label leaf_type -> X;
+      _ : cancel encode decode
+}.
