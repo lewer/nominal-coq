@@ -3,7 +3,9 @@ Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
 From MathComp
 Require Import bigop  finfun finset generic_quotient perm tuple fingroup.
 From Nominal
-Require Import finmap finsfun finperm nominal.
+Require Import finmap finsfun finperm nominal ast.
+
+Require Import Program.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -153,6 +155,28 @@ Canonical rAST_nominalType (node_label : Type) (leaf_type : nominalType atom) :=
   @NominalType atom
     (@rAST_choiceType node_label leaf_type) 
     (@rAST_nominal_mixin node_label leaf_type).
+
+Section AlphaEquivalence.
+
+Variables (node_label : eqType) (leaf_type : nominalType atom).
+
+Fixpoint alpha_rec (n : nat) (W1 W2 : rAST node_label leaf_type) :=
+  match n, W1, W2 with
+    |_, rLeaf x, rLeaf y => x == y
+    |S n, rCons c1 children1, rCons c2 children2 => 
+     (c1 == c2) && (all (fun z => alpha_rec n z.1 z.2) (zip children1 children2))
+    |S n, rBinderCons (c1, x) children1, rBinderCons (c2, y) children2 =>
+     (c1 == c2) && (let z := fresh_in (x, children1, y, children2) in
+                    all 
+                      (fun w => alpha_rec n (swap x z \dot w.1) (swap y z \dot w.2))
+                      (zip children1 children2))
+    |_, _,_ => false
+  end.
+
+Definition alpha W1 W2 := alpha_rec (rAST_depth W1) W1 W2.     
+
+End AlphaEquivalence.
+
 
 Record AST_Instance := 
   ASTInstance {
