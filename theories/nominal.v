@@ -4,7 +4,8 @@ Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
 From MathComp
 Require Import bigop  finfun finset generic_quotient perm tuple fingroup.
 
-Require Import finmap finsfun finperm.
+From Nominal
+Require Import finmap finsfun finperm utilitaires.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -75,6 +76,15 @@ Proof. by move => x; rewrite -actM (finperm_invVP π) act1. Qed.
 
 Lemma act_inj π : injective (act π).
 Proof. by move => x y /(congr1 (act π^-1)); rewrite !actK. Qed.
+
+Lemma act_conj π a b x : π \dot (swap a b) \dot x = swap (π a) (π b) \dot π \dot x.
+Proof. by rewrite -!actM tfinperm_conj. Qed.
+
+Lemma act_conj_imL π a b x : π \dot (swap a (π^-1 b)) \dot x = swap (π a) b \dot π \dot x.
+Proof. by rewrite -!actM tfinperm_conj_imL. Qed.
+
+Lemma act_conj_imR π a b x : π \dot (swap (π^-1 a) b) \dot x = swap a (π b) \dot π \dot x.
+Proof. by rewrite -!actM tfinperm_conj_imR. Qed.
 
 End BasicNominalTheory.
 
@@ -374,6 +384,7 @@ Proof.
    produit de transpositions *)
 Admitted.
 
+
 Definition fresh X a (x : X) := exists (S : {fset atom}), a \notin S /\ supports S x. 
 
 Notation "a # x" := (fresh a x) (x at level 60, at level 60).
@@ -405,6 +416,10 @@ Lemma im_fresh (X : nominalType atom) (π : {finperm atom}) a (x : X) :
   a # (π^-1 \dot x) -> (π a) # x.
 Proof. by rewrite -{2}[x](actVK π); apply fresh_equiv. Qed.
 
+Lemma im_inv_fresh (X : nominalType atom) (π : {finperm atom}) a (x : X) :
+  a # (π \dot x) -> (π^-1 a) # x.
+Proof. rewrite -{2}[x](actK π). by apply fresh_equiv. Qed.
+
 Lemma CFN_principle (X : nominalType atom) b a (x : X) :
   b # x -> swap a b \dot x = x -> a # x.
 Proof.
@@ -434,11 +449,33 @@ move: (fresh_neq_in (fset1U1 x S)).
 by rewrite eq_sym => /eqP. 
 Qed.
 
+Lemma fresh_atomC x y : x # y <-> y # x.
+Proof.
+split => hFresh .
+all: apply/fresh_atomP.
+all: rewrite eq_sym.
+all: by apply/fresh_atomP.
+Qed.
+
 Lemma fresh_fsetP (A : {fset atom}) x : reflect (x # A) (x \notin A).
 Proof.
 apply: (iffP idP) => [xNA|[S] [xNS /supports_fsetP /fsubsetP S_supp_A ]].
   exists A. split => //. exact: supportsP.
 exact: (contra (S_supp_A x)).
+Qed.
+
+Lemma fresh_fsetU1 (A B : {fset atom}) x : x # (A `|` B) -> x # A.
+Proof.
+move/fresh_fsetP.
+rewrite in_fsetU negb_or => /andP [? _].
+exact/fresh_fsetP.
+Qed.
+
+Lemma fresh_fsetU2 (A B : {fset atom}) x : x # (A `|` B) -> x # B.
+Proof.
+move/fresh_fsetP.
+rewrite in_fsetU negb_or => /andP [_ ?].
+exact/fresh_fsetP.
 Qed.
 
 Lemma fresh_support X a (x : X) : a \notin (support x) -> a # x.
@@ -448,10 +485,10 @@ split => //.
 exact: supportsP.
 Qed.
 
-Lemma fresh_transp (X : nominalType atom) (a b : atom) (x : X) 
-      {aFx: a # x} {bFx : b # x} : swap a b \dot x = x.
+Lemma fresh_transp {X : nominalType atom} (a b : atom) (x : X) :
+      a # x -> b # x -> swap a b \dot x = x.
 Proof.
-case: aFx bFx => [Sa [aNSa supp_Sa_x]] [Sb [bNSb supp_Sb_x]]. 
+move => [Sa [aNSa supp_Sa_x]] [Sb [bNSb supp_Sb_x]]. 
 have supp_SaISb_x : supports (Sa `&` Sb) x by apply: supportsI.
 apply supp_SaISb_x => c. rewrite in_fsetI => /andP [cSa cSb].
 have aNc : c != a.
@@ -483,6 +520,36 @@ apply (supp_Sy_y π) => b bSy. apply H.
   by rewrite in_fsetU bSy orbT.
 Qed.
 
+Lemma fresh_nil {X} a : a # Nil X.
+Proof.
+exists fset0. split => //.
+by rewrite in_fset0.
+Qed.
+
+Lemma supports_cons {X} S (x : X) (l : seq X): 
+  supports S (x :: l) -> supports S x /\ supports S l.
+Proof.
+move => S_supp_xl.
+split => π HS.
+all: move : (S_supp_xl π HS) => /= /eqP.
+all: by rewrite !listactE /= eqseq_cons => /andP [/eqP ? /eqP ?]. 
+Qed.
+
+Lemma fresh_cons {X} (l : seq X) a x : a # (x :: l) -> a # x /\ a # l.
+Proof.
+move => [S] [aNS /supports_cons [S_supp_x S_supp_l]]. 
+split.
+all: by exists S; split => //. 
+Qed.
+    
+Lemma fresh_list {X} (l : seq X) a : a # l -> forall x, x \in l -> a # x.
+Proof. 
+elim: l => // x l IHl /fresh_cons [aFx aFl] y. 
+rewrite inE => /orP. case.
+  by move /eqP ->.
+exact: IHl.
+Qed.
+
 Lemma fresh_perm (X : nominalType atom) (π : {finperm atom}) (x : X) : 
   [disjoint (support x) & finsupp π] -> π \dot x = x.
 Proof.
@@ -491,20 +558,24 @@ apply act_id => a /disj_x_π.
 exact: finsfun_dflt.
 Qed.
 
-Lemma supportsD1 (X : nominalType atom) (x : X) (S : {fset atom}) a : 
-  supports S x -> a # x -> supports (S `\ a) x.
+Lemma tfinperm_fresh a b c : a # c -> b # c -> swap a b c = c.
 Proof.
-move => supp_S_x [S' [aNS' supp_S'_x]] π fix_Sa.
-have supp_SS'_x : supports (S `&` S') x by apply supportsI.
-apply supp_SS'_x => b. rewrite in_fsetI => /andP [bS bS'].
-apply/fix_Sa/fsetD1P. split => //.
-apply/eqP => abs; subst.
-by rewrite bS' in aNS'.
+move => aFc bFc.
+apply/tfinpermNone/andP; split.
+all: exact/fresh_atomP/fresh_atomC.
 Qed.
 
 End Freshness.
 
 Notation "a # x" := (fresh a x) (x at level 60, at level 60).
+
+Ltac freshTacList :=
+  match goal with
+  | |- ?z # ?t  => 
+    match goal with 
+      | [ H : is_true (t \in ?l) |- _] => apply (@fresh_list _ l) => //
+    end
+end.
 
 Ltac freshTac :=
   match goal with
@@ -514,11 +585,38 @@ Ltac freshTac :=
       match goal with
         | |- fresh_in ?y  # ?x =>
          move : (fresh1P y);
-           repeat (move/fresh_prod; case);
-           auto
+            repeat (move/fresh_prod; case)
       end
-  end.
+  end;
+      (match goal with
+         | |- ( _ # ?x -> _) =>
+           let T := type of x in
+           match T with
+             | seq ?X => move => ?
+             |_ => move => ?
+           end
+       end).
 
+
+Ltac freshTacCtxt z :=
+  match goal with
+      | [ y := fresh_in ?x |- _] => 
+        match y with
+          |z => move: (fresh1P x); rewrite -/z
+        end
+  end;
+  repeat 
+    (move/fresh_prod;
+     case);
+  repeat 
+  (match goal with
+     | |- ( _ # ?x -> _) =>
+       let T := type of x in
+       match T with
+           |_ => move => ?
+       end
+   end).
+      
 
 (* fresh_dec (e : list { X : nominalType & X }) nom : is_fresh_dec x y -> is_fresh (fresh_in (interp e x)) (interp e y) *)
 (* Hint Extern 0 (@is_fresh _ _ _) => eapply fresh_in_fresh : typeclass_instances. *)
@@ -632,14 +730,15 @@ Variables (X : nominalType atom).
 Definition new (P : atom -> Prop) :=
   exists A : {fset atom}, forall a, a # A -> P a.
 
-Notation "\new a , P" := (new (fun a:atom => P))
-   (format "\new  a ,  P", at level 200).
+Notation "\new a , P" := (new (fun a : nat => P))
+   (format "\new  a ,  P", at level 10).
+Notation "a # x" := (fresh a x) (x at level 60, at level 60).
 
 Theorem some_any (R : atom -> X -> Prop) :
   equivariant_prop R ->
   forall x : X, [/\
-      (forall a : atom , a # x -> R a x) -> (\new a, R a x),
-      (\new a, R a x) ->  R (fresh_in (support x)) x,
+      (forall a : atom , a # x -> R a x) -> (\new a, (R a x)),
+      (\new a, (R a x)) ->  R (fresh_in (support x)) x,
       R (fresh_in (support x)) x -> (exists2 a, a # x & R a x) &
       (exists2 a, a # x & R a x)
       -> (forall a, a # x -> R a x)
@@ -649,7 +748,7 @@ move => Requi; split.
   - exists (support x) => a /fresh_fsetP/fresh_support. exact: (H a).
   - move => [S aNSR].
     apply/(Requi (swap (fresh_in x) (fresh_in (x,S)))).
-    rewrite swapL [_ \dot x]fresh_transp; [|by freshTac|by freshTac].
+    rewrite swapL [_ \dot x]fresh_transp; try (by freshTac). 
     apply/aNSR. by freshTac.
   - move => Rfresh. exists (fresh_in x) => //. exact: fresh1P.
   - move => [a a_fresh_x rax] a' a'_fresh_x.
@@ -659,7 +758,7 @@ Qed.
 
 Lemma new_forall (R : atom -> X -> Prop) :
   equivariant_prop R ->
-  forall x : X, ((\new a, R a x) <-> (forall a, a # x -> R a x)).
+  forall x : X, ((\new a, (R a x)) <-> (forall a, a # x -> R a x)).
 Proof.
 move=> Requi x. have [? ne ef] := some_any Requi x. 
 by split => // /ne /ef.
@@ -667,7 +766,7 @@ Qed.
 
 Lemma new_exists  (R : atom -> X -> Prop) :
   equivariant_prop R -> 
-  forall x : X, ((\new a, R a x) <-> (exists2 a, a # x & R a x)).
+  forall x : X, ((\new a, (R a x)) <-> (exists2 a, a # x & R a x)).
 Proof.
 move=> Requi x; have [fn nf nh ef] := some_any Requi x.
 by split => [/nf/nh|/ef].
@@ -675,15 +774,76 @@ Qed.
 
 Lemma fresh_new (R : atom -> X -> Prop) :
   equivariant_prop R ->
-  forall x: X, R (fresh_in x) x <-> \new a, R a x. 
+  forall x: X, R (fresh_in x) x <-> \new a, (R a x). 
 Proof.
 move=> Requi x. have [fn nf nh ef] := some_any Requi x. 
 by split => [/nh/ef/fn | /nf]. 
 Qed.
 
+Lemma some_fresh_new (R : atom -> X -> Prop) :
+  equivariant_prop R ->
+  forall (y : atom) (x : X), y # x -> (R y x) <-> \new a, (R a x).
+Proof.  
+move => Requi y x yFx.
+split => [Ryx|/(new_forall Requi) new_Rax].
+  apply new_exists => //.
+  by exists y.
+exact/new_Rax.
+Qed.
+
+Lemma new_eq P1 P2 :
+ (forall z, P1 z <-> P2 z) -> (\new z, (P1 z)) <-> (\new z, (P2 z)).
+Proof.
+move => P1_eq_P2.
+split.
+all: move => [S] HS; exists S => a aFS.
+all: exact/P1_eq_P2/(HS _ aFS).
+Qed.
+
+Lemma new_and P1 P2 : 
+  \new z, (P1 z /\ P2 z) <-> (\new z, (P1 z) /\ \new z, (P2 z)).
+Proof.
+split.
+  move => [S] HS; split;
+  exists S => a aFS. 
+    exact: (proj1 (HS _ aFS)).
+  exact: (proj2 (HS _ aFS)).
+move => [[S1] HS1 [S2] HS2].
+exists (S1 `|` S2) => a aFS1S2; split.
+  exact/(HS1 a)/(fresh_fsetU1 aFS1S2).
+exact/(HS2 a)/(fresh_fsetU2 aFS1S2).
+Qed.
+
+Lemma new_andb P1 P2 : 
+  \new z, (P1 z && P2 z) <-> (\new z, (P1 z) /\ \new z, (P2 z)).
+Proof.
+have andb_eq_and : \new z, (P1 z && P2 z) <-> \new z, (P1 z /\ P2 z).
+  apply new_eq; split => [/andP|? ] //; exact/andP.
+split.
+  move/andb_eq_and. by apply new_and.
+move => ?. exact/andb_eq_and/new_and.
+Qed.
+
+
+Lemma new_all2 {A : eqType} {p : atom -> A -> A -> bool} {l1 l2 : seq A} : 
+  (\new z, (all2 (p z) l1 l2)) <-> (all2_prop (fun t1 t2 => \new z, (p z t1 t2)) l1 l2).
+Proof.
+elim: l1 l2 => /=.
+  move => [|a l2]; split => //.
+    by move => _; exists fset0 => //.
+  by move => [S] /(_ _ (fresh1P S)).
+move => a1 l1 IHl1 [|a2 l2].
+  split => //. by move => [S] /(_ _ (fresh1P S)).
+split. 
+  move/new_andb => [? ?]; split => //.
+  by apply/IHl1.
+move => [? ?]; apply/new_andb; split => //.
+by apply/IHl1.
+Qed.
+
+
 End SomeAny.
 
-Notation "\new a , P" := (new (fun a:atom => P))
-   (format "\new  a ,  P", at level 200).
+Notation "\new a , P" := (new (fun a : nat => P))
+   (format "\new  a ,  P", at level 10).
 Notation "a # x" := (fresh a x) (x at level 60, at level 60).
-  

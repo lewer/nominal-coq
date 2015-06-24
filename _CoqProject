@@ -1,6 +1,9 @@
 -R theories Nominal
+
 theories/finmap.v
 theories/finsfun.v
 theories/finperm.v
 theories/nominal.v
-theories/untyped_lambda_calculus.v
+theories/ast.v
+theories/utilitaires.v
+

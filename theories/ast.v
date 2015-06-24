@@ -3,7 +3,7 @@ Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
 From MathComp
 Require Import bigop  finfun finset generic_quotient perm tuple fingroup.
 From Nominal
-Require Import finmap finsfun finperm nominal.
+Require Import finmap finsfun finperm nominal utilitaires.
 
 Require Import Program.
 
@@ -17,52 +17,6 @@ Local Open Scope fset.
 Local Open Scope quotient_scope.
 
 Import Key.Exports.
-
-Section Utils.
-
-Definition maxlist l := foldr maxn 0 l.
-
-Lemma maxlist_leqP l n : reflect (forall x, x \in l -> x <= n)
-                                 (maxlist l <= n).
-Proof.
-apply: (iffP idP); elim: l => //.
-  move => m l IHl /=.  
-  rewrite geq_max => /andP [m_leq_n maxl_leq_n] p.
-  rewrite in_cons => /orP. case.
-    by move/eqP ->.
-  exact: IHl.
-move => m l IHl Hml /=.
-rewrite geq_max. apply/andP; split.
-  exact/Hml/mem_head.
-apply IHl => p pl.
-apply Hml. by rewrite in_cons pl orbT.
-Qed.
-
-Lemma in_maxlist l x : x \in l -> x <= maxlist l.
-Proof.
-elim: l => //= a l IHl.
-rewrite in_cons => /orP. case.
-  move/eqP ->. by rewrite leq_maxl.
-move/IHl => x_leq_maxl. apply (@leq_trans (maxlist l)) => //.
-by rewrite leq_maxr.
-Qed.
-
-Fixpoint all2 {A : eqType} (p : A -> A -> bool) (l1 l2 : seq A) :=
-  match l1, l2 with
-    |[::], [::] => true
-    |a::q, b::r => (p a b) && all2 p q r
-    |_, _ => false
-  end.
-
-Lemma eq_in_all2 {A : eqType} (s1 s2 : seq A) (p1 p2 : A -> A -> bool) : 
-  {in s1 & s2, p1 =2 p2} -> all2 p1 s1 s2  = all2 p2 s1 s2.
-Proof.
-elim: s1 s2. by case.
-move => a1 s1 IHl. case => // a2 s2 p1_eq_p2 /=. 
-rewrite p1_eq_p2 ?mem_head // IHl //.
-move => x1 x2 x1s1 x2s2. apply p1_eq_p2;
-by rewrite inE (x1s1, x2s2) orbT.
-Qed.
 
 Section ASTDef.
 
@@ -284,12 +238,12 @@ all: rewrite ltnS => m_leq_n /(@depth_cons_leq _ _ _) /allP IHl1 /=.
 all: apply andb_id2l => _. 
 all: apply eq_in_all2 => t1 t2 t1l2 t2l2.
   - rewrite !ihn //; last exact: IHl1.
-    apply/maxlist_leqP => r /mapP [t] tl1 ->. 
-    apply (@leq_trans m) => //. exact: IHl1.
-  exact/in_maxlist/map_f.
+      apply/(@leq_trans m) => //. 
+      exact/maxlist_map_leqP.
+    exact/in_maxlist/map_f.
   - rewrite !ihn //; last rewrite depth_perm; last exact: IHl1.
-    apply/maxlist_leqP => r /mapP [t] tl1 ->. 
-    apply (@leq_trans m) => //. exact: IHl1.
+      apply (@leq_trans m) => //. 
+      exact/maxlist_map_leqP/IHl1.
   rewrite depth_perm. exact/in_maxlist/map_f.
 Qed.
 
@@ -316,6 +270,71 @@ rewrite /alpha /=.
 apply andb_id2l => _. apply eq_in_all2 => t1 t2 ? ?.
 rewrite alpha_recE // depth_perm.
 exact/in_maxlist/map_f.
+Qed.
+
+Definition alphaE := (alpha_LeafE, alpha_ConsE, alpha_BinderConsE).
+
+Lemma alpha_equivariant (W1 W2 : rAST node_label leaf_type) (π : {finperm atom}):
+  alpha (π \dot W1) (π \dot W2) = alpha W1 W2.
+Proof.
+rewrite/alpha depth_perm.
+move: {-1}(rAST_depth W1) (leqnn (rAST_depth W1)) => n.
+elim: n W1 W2 π => [|n IHn] [x1|c1 l1|c1 x1 l1] [x2|c2 l2|c2 x2 l2] π //=.
+  rewrite inj_eq //. exact: act_inj.
+  rewrite inj_eq //. exact: act_inj.
+  (* comment appliquer aux deux sous-buts sans recopier ? *)
+all: rewrite ltnS => /maxlist_map_leqP IHl1.
+all: apply andb_id2l => _.
+all: rewrite all2_map; apply eq_in_all2 => t1 t2 t1l1 t2l2.
+  exact/IHn/IHl1.
+set z := fresh_in _; set y := fresh_in _.
+rewrite -act_conj_imL -[X in alpha_rec _ _ X]act_conj_imL.
+rewrite IHn; try rewrite -[RHS](@IHn _ _ (swap y (π^-1 z))).
+  all: try (rewrite depth_perm; exact: IHl1). (* comment apliquer aux buts 2 et 3 ?) *)
+freshTacCtxt z; freshTacCtxt y.
+rewrite -{1}[t1](@fresh_transp _ y (π^-1 z)) //; try freshTacList;
+  last exact: im_inv_fresh.
+rewrite -{1}[t2](@fresh_transp _ y (π^-1 z)) //; try freshTacList;
+  last exact: im_inv_fresh. (* comment réécrire dans t1 et t2 à la fois ? *)
+rewrite 2?[in RHS]act_conj tfinpermL !tfinperm_fresh //.
+all: exact/im_inv_fresh. 
+Qed.
+
+Lemma alpha_equivariantprop : equivariant_prop alpha.
+Proof. move => π t t' /=. by rewrite alpha_equivariant. Qed.
+
+Lemma alpha_BConsP x1 x2 c1 c2 (l1 l2 : seq (@rAST node_label leaf_type)) : 
+  reflect (c1 = c2 /\
+           \new z, (all2 (fun t1 t2 => alpha (swap x1 z \dot t1)
+                                            (swap x2 z \dot t2))
+                                            l1 l2))
+          (alpha (rBinderCons c1 x1 l1) (rBinderCons c2 x2 l2)).
+Proof.
+move : (equi_funprop (@swap_equiv _) alpha_equivariantprop) => /= Requi.
+rewrite alphaE.
+apply/(equivP andP); apply and_iff_congr => /=.
+  by symmetry; apply (rwP eqP).
+eapply iff_stepl. by symmetry; apply new_all2.
+eapply iff_stepl. by apply (rwP (@all2P _ _ _ _)). (* comment faire plus élégant ?*)
+apply eq_in_all2_prop => t1 t2 t1l1 t2l2.
+apply (@some_fresh_new _ _ Requi _ ((x1, t1), (x2, t2))).
+freshTac => *.
+apply/fresh_prod; split; apply/fresh_prod;split => //.
+all: by freshTacList.
+Qed.
+
+Lemma alpha_refl : reflexive alpha.
+Proof.
+elim/rAST_better_ind => [s|c l|c x l]; rewrite alphaE eqxx //=.
+all: elim: l => //= a l IHl Hal.
+all: rewrite ?alpha_equivariant Hal/=; last exact: mem_head.
+  apply IHl => t tl. apply Hal.
+  by rewrite in_cons tl orbT.
+erewrite eq_in_all2.
+  apply IHl => t tl. apply Hal.
+  by rewrite in_cons tl orbT.
+move => t1 t2 t1l t2l.
+by rewrite !alpha_equivariant.
 Qed.
 
 End AlphaEquivalence.

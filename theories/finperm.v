@@ -351,6 +351,14 @@ move/andP => [ab a'b]. have [πb_out] : (π b != π a) && (π b != π a').
 by rewrite tfinpermNone.
 Qed.
 
+Lemma tfinperm_conj_imL a a' (π : {finperm K}) :
+  π * (tfinperm a (π^-1 a')) = tfinperm (π a) a' * π.
+Proof. by rewrite tfinperm_conj finpermVK. Qed.
+
+Lemma tfinperm_conj_imR a a' (π : {finperm K}) :
+  π * (tfinperm (π^-1 a) a') = tfinperm a (π a') * π.
+Proof. by rewrite tfinperm_conj finpermVK. Qed.
+
 Lemma tfinperm_supp x y : finsupp (tfinperm x y) `<=` [fset x;y].
 Proof.
 apply/fsubsetP => z. rewrite mem_finsupp in_fset2.
