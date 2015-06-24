@@ -80,13 +80,6 @@ Fixpoint rAST_depth (t : rAST) : nat :=
     |rBinderCons _ _ l => (maxlist (map rAST_depth l)).+1
   end.
 
-(* Lemma rAST_size_ind (P : rAST -> Prop) : *)
-(*   (forall (x : leaf_type), P (rLeaf x)) -> *)
-(*   (forall W,  (forall W', rAST_depth W' <= rAST_depth W -> P W') -> P W) -> *)
-(*   forall W, P W. *)
-(* Admitted. *)
-
-
 Fixpoint rAST_act (π : {finperm atom}) (t : rAST) :=
   match t with
     |rLeaf u => rLeaf (π \dot u)
@@ -328,6 +321,7 @@ Proof.
 elim/rAST_better_ind => [s|c l|c x l]; rewrite alphaE eqxx //=.
 all: elim: l => //= a l IHl Hal.
 all: rewrite ?alpha_equivariant Hal/=; last exact: mem_head.
+(* j'aimerais appliquer des tactiques à un sous-but donné *)
   apply IHl => t tl. apply Hal.
   by rewrite in_cons tl orbT.
 erewrite eq_in_all2.
@@ -335,6 +329,27 @@ erewrite eq_in_all2.
   by rewrite in_cons tl orbT.
 move => t1 t2 t1l t2l.
 by rewrite !alpha_equivariant.
+Qed.
+
+Lemma alpha_sym : symmetric alpha.
+Proof.
+move => t1 t2; rewrite/alpha.
+move: {-1}(rAST_depth t1) (leqnn (rAST_depth t1)) => n.
+elim: n t1 t2 => [|n IHn] [x1|c1 l1|c1 x1 l1] [x2|c2 l2|c2 x2 l2] //=;
+rewrite eq_sym.
+all: rewrite ltnS => /maxlist_map_leqP depth_l1_leqn.
+all: apply andb_id2l => _.
+all: apply all2_switch => t1 t2 t1l1 t2l2.
+all: rewrite /switch IHn ?depth_perm; last by apply depth_l1_leqn.
+  exact/sym_eq/alpha_recE/in_maxlist/map_f.
+rewrite !alpha_recE; last first.
+  by rewrite depth_perm. 
+  rewrite depth_perm; exact/in_maxlist/map_f.
+suff : fresh_in (x1, l1, x2, l2) = fresh_in (x2, l2, x1, l1) by move ->.
+suff : support (x1, l1, x2, l2) = support (x2, l2, x1, l1) 
+  by rewrite/fresh_in => ->. 
+repeat (rewrite/support/=).
+by rewrite -fsetUA fsetUC fsetUA. 
 Qed.
 
 End AlphaEquivalence.

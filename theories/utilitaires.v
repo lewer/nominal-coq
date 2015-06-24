@@ -101,6 +101,18 @@ move => a1 s1 IH. case => // a2 s2 /=.
 by rewrite IH.
 Qed.
 
+Definition switch {A B} (f : A -> A -> B) x y := f y x.
+
+Lemma all2_switch {A : eqType} (s1 s2 : seq A) (p q : A -> A -> bool) :
+  {in s1 & s2, p =2 switch q} -> all2 p s1 s2 = all2 q s2 s1.
+Proof.
+elim: s1 s2. by case.
+move => a1 s1 IH. case => // a2 s2 p_switch /=.
+rewrite p_switch ?mem_head //.
+rewrite IH // => t1 t2 t1s1 t2s2.
+apply p_switch; by rewrite in_cons (t1s1, t2s2) orbT.
+Qed.  
+
 Lemma and_iff_congr A B C D : (A <-> B) -> (C <-> D) -> (A /\ C) <-> (B /\ D). 
 Proof.
 move => A_eq_B C_eq_D.
