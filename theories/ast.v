@@ -1,11 +1,9 @@
 From Ssreflect
 Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
 From MathComp
-Require Import bigop  finfun finset generic_quotient perm tuple fingroup.
+Require Import finfun finset generic_quotient.
 From Nominal
 Require Import finmap finsfun finperm nominal utilitaires.
-
-Require Import Program.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -318,17 +316,10 @@ Qed.
 
 Lemma alpha_refl : reflexive alpha.
 Proof.
-elim/rAST_better_ind => [s|c l|c x l]; rewrite alphaE eqxx //=.
-all: elim: l => //= a l IHl Hal.
-all: rewrite ?alpha_equivariant Hal/=; last exact: mem_head.
-(* j'aimerais appliquer des tactiques à un sous-but donné *)
-  apply IHl => t tl. apply Hal.
-  by rewrite in_cons tl orbT.
-erewrite eq_in_all2.
-  apply IHl => t tl. apply Hal.
-  by rewrite in_cons tl orbT.
-move => t1 t2 t1l t2l.
-by rewrite !alpha_equivariant.
+elim/rAST_better_ind => [s|c l|c x l]; rewrite alphaE eqxx //= => Hrefl.
+all: apply all2_refl => t.
+  exact/Hrefl.
+rewrite alpha_equivariant. exact/Hrefl.
 Qed.
 
 Lemma alpha_sym : symmetric alpha.
@@ -339,7 +330,7 @@ elim: n t1 t2 => [|n IHn] [x1|c1 l1|c1 x1 l1] [x2|c2 l2|c2 x2 l2] //=;
 rewrite eq_sym.
 all: rewrite ltnS => /maxlist_map_leqP depth_l1_leqn.
 all: apply andb_id2l => _.
-all: apply all2_switch => t1 t2 t1l1 t2l2.
+all: apply all2_sym => t1 t2 t1l1 t2l2.
 all: rewrite /switch IHn ?depth_perm; last by apply depth_l1_leqn.
   exact/sym_eq/alpha_recE/in_maxlist/map_f.
 rewrite !alpha_recE; last first.
@@ -352,7 +343,123 @@ repeat (rewrite/support/=).
 by rewrite -fsetUA fsetUC fsetUA. 
 Qed.
 
+Lemma alpha_trans : transitive alpha.
+move => t2 t1 t3.
+move: {-1}(rAST_depth t1) (leqnn (rAST_depth t1)) => n.
+elim: n t1 t2 t3 => [|n IHn] [x1|c1 l1|c1 x1 l1] 
+                             [x2|c2 l2|c2 x2 l2] 
+                             [x3|c3 l3|c3 x3 l3] //=; 
+try solve [move => _; apply eq_op_trans].
+all: rewrite ltnS => /maxlist_map_leqP deptht1_leqn.
+  rewrite !alphaE => /andP [c1_eq_c2 Hl1l2] /andP [c2_eq_c3 Hl2l3].
+  rewrite (eq_op_trans c1_eq_c2 c2_eq_c3) /=.
+  move: Hl1l2 Hl2l3; apply all2_trans => t1 t2 t3 t1l1 t2l2 t3l3.
+  by apply/IHn; auto.
+move => /alpha_BConsP [c1_eq_c2 /new_all2 alpha_l1l2].
+move => /alpha_BConsP [c2_eq_c3 /new_all2 alpha_l2l3].
+apply/alpha_BConsP; split; first exact: eq_trans c1_eq_c2 c2_eq_c3.
+apply/new_all2. move: alpha_l1l2 alpha_l2l3.
+apply all2_prop_trans => t1 t2 t3 t1l1 t2l2 t3l3 [St1t2] HSt1t2 [St2t3] HSt2t3.
+exists (St1t2 `|` St2t3) => a aFSt1t2St2t3.
+move: (HSt1t2 _ (fresh_fsetU1 aFSt1t2St2t3)) (HSt2t3 _ (fresh_fsetU2 aFSt1t2St2t3)).
+apply IHn.
+by rewrite depth_perm; auto.
+Qed.
+
 End AlphaEquivalence.
+
+Section Quotient.
+
+Variables (node_label : eqType) (leaf_type : nominalType atom).
+
+Canonical alpha_equiv := 
+  EquivRel (@alpha node_label leaf_type) 
+           (@alpha_refl node_label leaf_type) 
+           (@alpha_sym node_label leaf_type) 
+           (@alpha_trans node_label leaf_type).
+
+Definition AST := {eq_quot @alpha node_label leaf_type}.
+Definition AST_eqMixin := [eqMixin of AST].
+Canonical AST_eqType := EqType AST AST_eqMixin.
+Canonical AST_choiceType := Eval hnf in [choiceType of AST].
+Canonical AST_countType := Eval hnf in [countType of AST].
+Canonical AST_quotType := Eval hnf in [quotType of AST].
+Canonical AST_eqQuotType := Eval hnf in 
+      [eqQuotType (@alpha node_label leaf_type) of AST].
+
+Lemma alpha_eqE t t' : alpha t t' = (t == t' %[mod AST]).
+Proof. by rewrite piE. Qed.
+
+Lemma all2_alpha_eq l1 l2 : 
+  all2 (@alpha node_label leaf_type) l1 l2 -> 
+  map \pi_AST l1 = map \pi_AST l2. 
+Proof.
+move => /all2P alpha_l1l2. apply/all2_prop_eq/all2_prop_map.
+move : alpha_l1l2; apply eq_in_all2_prop => t1 t2 t1s1 t2s2.
+rewrite alpha_eqE. 
+by split; move/eqP.
+Qed.
+
+Definition Leaf x := lift_cst AST (rLeaf node_label x).
+Lemma rLeafK x : \pi_AST (rLeaf node_label x) = Leaf x.
+Proof. by unlock Leaf. Qed.
+
+Notation lift_map f := 
+  (locked (fun l : seq AST => \pi_AST (f (map (@repr _ AST_quotType) l)))).
+
+Definition Cons c := lift_map (rCons c).
+Lemma rConsK c l : \pi_AST (rCons c l) = Cons c (map \pi_AST l).
+Proof.
+unlock Cons; apply/eqP. 
+rewrite [_ == _]piE alphaE eqxx /= -map_comp.
+rewrite all2_mapr. apply all2_refl => t _ /=.
+by rewrite alpha_eqE reprK.
+Qed.
+
+Definition BinderCons c x := lift_map (rBinderCons c x).
+Lemma rBinderConsK c x l : \pi_AST (rBinderCons c x l) = BinderCons c x (map \pi_AST l).
+Proof.
+unlock BinderCons; apply/eqP.
+rewrite [_ == _]piE alphaE eqxx /= -map_comp.
+rewrite all2_mapr. apply all2_refl => t _ /=.
+by rewrite alpha_equivariant alpha_eqE reprK.
+Qed.
+
+Lemma LeafK x : repr (Leaf x) = rLeaf node_label x. 
+Proof.
+have : alpha (repr (Leaf x)) (rLeaf node_label x). 
+(* comment ne pas avoir à spécifier node_lavel ? *)
+  by rewrite alpha_eqE reprK rLeafK. 
+by case: (repr (Leaf x)) => // ? /eqP ->. 
+Qed.
+
+Lemma ConsK c l : exists repr_l,
+    l = map \pi_AST repr_l /\ repr (Cons c l) = rCons c repr_l.
+Proof.
+have: alpha (repr (Cons c l)) (rCons c (map repr l)).
+  rewrite alpha_eqE reprK rConsK -map_comp map_id_in //. 
+  move => t _ /=. by rewrite reprK.
+case: (repr (Cons _ _)) => //= c2 l2;
+rewrite alphaE // => /andP [/eqP c2_eq_c] => /all2_alpha_eq. 
+rewrite -map_comp map_id_in => pil2_ll1; 
+  last by move => _ /=; rewrite reprK.
+by exists l2; split; last by rewrite c2_eq_c.
+Qed.
+
+Lemma Leaf_inj x y : Leaf x = Leaf y -> x = y.
+Proof. move/(congr1 repr). rewrite !LeafK => H. by injection H. Qed.
+
+Lemma Cons_inj c1 c2 l1 l2 : 
+  Cons c1 l1 = Cons c2 l2 -> c1 = c2 /\ l1 = l2.
+Proof.
+move/(congr1 repr). 
+have [reprl1 [-> ->]] := ConsK c1 l1.
+have [reprl2 [-> ->]] := ConsK c2 l2.
+move => H.
+by injection H => -> ->. 
+Qed.
+
+End Quotient.
 
 
 Record AST_Instance := 

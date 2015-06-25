@@ -583,20 +583,11 @@ Ltac freshTac :=
     | |- ?a # ?x =>
       try (subst a);
       match goal with
-        | |- fresh_in ?y  # ?x =>
-         move : (fresh1P y);
-            repeat (move/fresh_prod; case)
-      end
-  end;
-      (match goal with
-         | |- ( _ # ?x -> _) =>
-           let T := type of x in
-           match T with
-             | seq ?X => move => ?
-             |_ => move => ?
-           end
-       end).
-
+        | |- fresh_in ?y  # ?x => move : (fresh1P y)
+      end;
+      repeat (move/fresh_prod; case)
+  end; move => *.
+        
 
 Ltac freshTacCtxt z :=
   match goal with
@@ -608,14 +599,7 @@ Ltac freshTacCtxt z :=
   repeat 
     (move/fresh_prod;
      case);
-  repeat 
-  (match goal with
-     | |- ( _ # ?x -> _) =>
-       let T := type of x in
-       match T with
-           |_ => move => ?
-       end
-   end).
+  move => *.
       
 
 (* fresh_dec (e : list { X : nominalType & X }) nom : is_fresh_dec x y -> is_fresh (fresh_in (interp e x)) (interp e y) *)

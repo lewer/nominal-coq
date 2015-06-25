@@ -1,7 +1,7 @@
 From Ssreflect
 Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
 From MathComp
-Require Import bigop  finfun finset generic_quotient perm tuple fingroup.
+Require Import bigop  finfun finset generic_quotient.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -53,7 +53,7 @@ Fixpoint all2 {A : eqType} (p : A -> A -> bool) (l1 l2 : seq A) :=
     |_, _ => false
   end.
 
-Fixpoint all2_prop {A : eqType} (p : A -> A -> Prop) (l1 l2 : seq A) :=
+Fixpoint all2_prop {A : Type} (p : A -> A -> Prop) (l1 l2 : seq A) :=
   match l1, l2 with
     |[::], [::] => True
     |a::q, b::r => (p a b) /\ all2_prop p q r
@@ -93,6 +93,16 @@ move => x1 x2 x1s1 x2s2. apply p1_eq_p2;
 by rewrite inE (x1s1, x2s2) orbT.
 Qed.
 
+Lemma all2_prop_eq {A : Type} (s1 s2 : seq A) :
+  all2_prop eq s1 s2 <-> s1 = s2.
+Proof.
+elim: s1 s2 => [[|? ?]|a1 s1 IHs1 [|a2 s2]] //=.
+split => [[a1_eq_a2 eq_s1s1]|a1s1_eq_a2s2].
+  by rewrite a1_eq_a2 (iffLR (IHs1 s2)).
+injection a1s1_eq_a2s2 => <- ->; split => //.
+exact/IHs1.
+Qed.
+
 Lemma all2_map {A : eqType} (s1 s2 : seq A) (p : A -> A -> bool) (f g : A -> A) :
   all2 p (map f s1) (map g s2) = all2 (fun x y => p (f x) (g y)) s1 s2.
 Proof.
@@ -101,9 +111,34 @@ move => a1 s1 IH. case => // a2 s2 /=.
 by rewrite IH.
 Qed.
 
+Lemma all2_prop_map {A B : Type} {s1 s2 : seq A} {P : B -> B -> Prop} {f g : A -> B} :
+  all2_prop (fun x y => P (f x) (g y)) s1 s2 -> all2_prop P (map f s1) (map g s2).
+Proof.
+elim: s1 s2. by case.
+move => a1 s1 IH. case => // a2 s2 /= [? ?]; split => //.
+exact/IH.
+Qed.
+
+Lemma all2_mapl {A : eqType} (s : seq A) (p : A -> A -> bool) (f : A -> A) :
+  all2 p (map f s) s = all2 (fun x y => p (f x) y) s s.
+Proof. by rewrite -{2}[s]map_id all2_map. Qed.
+
+Lemma all2_mapr {A : eqType} (s : seq A) (p : A -> A -> bool) (f : A -> A) :
+  all2 p s (map f s) = all2 (fun x y => p x (f y)) s s.
+Proof. by rewrite -{1}[s]map_id all2_map. Qed.
+
+Lemma all2_refl {A : eqType} (s : seq A) (p : A -> A -> bool) :
+  {in s, reflexive p} -> all2 p s s. 
+Proof.
+elim: s => // a l IHl reflp /=.
+rewrite reflp /=; last exact: mem_head.
+apply IHl => x xl. apply reflp.
+by rewrite in_cons xl orbT.
+Qed.
+
 Definition switch {A B} (f : A -> A -> B) x y := f y x.
 
-Lemma all2_switch {A : eqType} (s1 s2 : seq A) (p q : A -> A -> bool) :
+Lemma all2_sym {A : eqType} (s1 s2 : seq A) (p q : A -> A -> bool) :
   {in s1 & s2, p =2 switch q} -> all2 p s1 s2 = all2 q s2 s1.
 Proof.
 elim: s1 s2. by case.
@@ -112,6 +147,28 @@ rewrite p_switch ?mem_head //.
 rewrite IH // => t1 t2 t1s1 t2s2.
 apply p_switch; by rewrite in_cons (t1s1, t2s2) orbT.
 Qed.  
+
+Lemma all2_prop_trans {A : eqType} (s1 s2 s3 : seq A) (P1 P2 P3 : A -> A -> Prop) :
+  (forall x1 x2 x3, x1 \in s1 -> x2 \in s2 -> x3 \in s3 ->
+     (P1 x1 x2 -> P2 x2 x3 -> P3 x1 x3)) -> 
+     (all2_prop P1 s1 s2) -> (all2_prop P2 s2 s3) -> (all2_prop P3 s1 s3).  
+Proof.
+Proof.
+elim: s1 s2 s3 => [[|a2 s2] [|a3 s3]|a1 s1 IHs1 [|a2 s2] [|a3 s3]] //= Htrans. 
+move => [p1a1a2 p1s1s2] [p2a2a3 p2s2s3]; split.
+  apply (@Htrans a1 a2 a3) => //; exact/ mem_head.
+apply (@IHs1 s2 s3) => // x1 x2 x3 x1s1 x2s2 x3s3.
+apply Htrans; by rewrite in_cons (x1s1, x2s2, x3s3) orbT.
+Qed.
+
+Lemma all2_trans {A : eqType} (s1 s2 s3 : seq A) (p1 p2 p3 : A -> A -> bool) :
+  (forall x1 x2 x3, x1 \in s1 -> x2 \in s2 -> x3 \in s3 ->
+     (p1 x1 x2 -> p2 x2 x3 -> p3 x1 x3)) -> 
+     (all2 p1 s1 s2) -> (all2 p2 s2 s3) -> (all2 p3 s1 s3).  
+Proof.
+move => H /all2P Hs1s2 /all2P Hs2s3; apply/all2P. 
+move: Hs1s2 Hs2s3. exact/all2_prop_trans.
+Qed.
 
 Lemma and_iff_congr A B C D : (A <-> B) -> (C <-> D) -> (A /\ C) <-> (B /\ D). 
 Proof.
