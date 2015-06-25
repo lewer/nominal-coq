@@ -461,6 +461,50 @@ Qed.
 
 End Quotient.
 
+Section NominalAST.
+
+Variables (node_label : eqType) (leaf_type : nominalType atom).
+
+Implicit Types (π : {finperm atom}) (t : AST node_label leaf_type).
+Local Notation AST := (AST node_label leaf_type).
+Local Notation AST_choiceType := (AST_choiceType node_label leaf_type).
+
+Definition AST_act π t := \pi_AST (π \dot repr t).
+
+Lemma AST_act1 : AST_act (1 atom) =1 id.
+Proof. move => t /=. by rewrite /AST_act act1 reprK. Qed.
+
+Lemma AST_act_equiv π t : 
+  π \dot (repr t) == repr (AST_act π t) %[mod AST].   
+Proof. by rewrite /AST_act reprK. Qed.
+
+Lemma AST_actM π π' t : AST_act (π * π') t = AST_act π (AST_act π' t).
+Proof.
+apply/eqP. 
+by rewrite /AST_act actM piE alpha_equivariant alpha_eqE reprK. 
+Qed.
+
+Lemma AST_actproper : 
+  forall t1 t2 π, t1 = t2 -> (AST_act π t1) = (AST_act π t2).
+Proof. by move => t1 t2 π ->. Qed.
+
+Definition AST_nominal_setoid_mixin :=
+  @PermSetoidMixin AST (@eq AST) atom AST_act AST_act1 AST_actM AST_actproper.
+
+Lemma AST_act_id π t :
+     (forall a : atom, a \in rAST_support (repr t) -> π a = a) -> 
+     AST_act π t = t.
+Proof.
+rewrite/AST_act => Hact_id.
+by rewrite act_id // reprK. 
+Qed.
+
+Definition AST_nominal_mixin :=
+  @NominalMixin AST_choiceType atom AST_nominal_setoid_mixin _ AST_act_id.
+
+Canonical AST_nominalType := @NominalType atom AST_choiceType AST_nominal_mixin.
+
+End NominalAST.
 
 Record AST_Instance := 
   ASTInstance {
