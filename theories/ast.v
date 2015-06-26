@@ -627,7 +627,7 @@ Qed.
 (* right. exists S; split => // π HS. *)
 (* apply (@BConsx_inj c (π y)). rewrite -BinderCons_equivariant. *)
 
-Lemma eq_Bcons c x y l :
+Lemma eq_BCons c x y l :
   y # x -> y # l -> BinderCons c x l = BinderCons c y (swap x y \dot l).
 Proof.
 move => xFy xFl.
@@ -646,10 +646,52 @@ Proof.
 pose y := fresh_in (x, l, BinderCons c x l); freshTacCtxt y.
 apply (@CFN_principle y) => //.
 rewrite BinderCons_equivariant tfinpermL.
-exact/sym_eq/eq_Bcons.
+exact/sym_eq/eq_BCons.
 Qed.
 
 End VariousLemmas.
 
 Section EliminationPrinciples.
 
+Variables (cons_label : eqType) (bcons_label : eqType) (leaf_label : nominalType atom).
+Local Notation AST := (AST cons_label bcons_label leaf_label).
+Local Notation Leaf := (@Leaf cons_label bcons_label leaf_label).
+Local Notation Cons := (@Cons cons_label bcons_label leaf_label).
+Local Notation BinderCons := (@BinderCons cons_label bcons_label leaf_label).
+
+Lemma AST_naive_ind (P : AST -> Prop) :
+  (forall x, P (Leaf x)) ->
+  (forall c l, (forall t, t \in l -> P t) -> P (Cons c l)) ->
+  (forall c x l, (forall t, t \in l -> P t) -> P (BinderCons c x l)) ->
+  forall u, P u.
+(* {in l, P} ? *)
+Proof. 
+move => HLeaf HCons HBCons u; rewrite -[u]reprK.
+elim/rAST_better_ind : (repr u) => [x|c l IHl|c x l IHl] /=.
+  - by rewrite rLeafK.
+  - rewrite rConsK. apply HCons => t /mapP [reprt ?] ->.
+    exact/IHl.
+  - rewrite rBinderConsK. apply HBCons => t /mapP [reprt ?] ->.
+    exact/IHl.
+Qed.
+
+Lemma AST_ind {env : nominalType atom} (C : env) (P : AST -> Prop) :
+  (forall x, P (Leaf x)) ->
+  (forall c l, (forall t, t \in l -> P t) -> P (Cons c l)) ->
+  (forall c x l, x # C -> (forall t, t \in l -> P t) -> P (BinderCons c x l)) ->
+  forall u, P u.
+(* {in l, P} ? *)
+Proof. 
+move => HLeaf HCons HBcons u.
+suff : forall π, P (π \dot u).
+  by move => /(_ (1 atom)); rewrite act1.
+elim/AST_naive_ind : u => [x|c l IHl|c x l IHl] π.
+  - by rewrite Leaf_equivariant.
+  - rewrite Cons_equivariant. apply HCons => t /mapP [reprt ?] ->. 
+    exact/IHl.    
+  - rewrite BinderCons_equivariant. 
+    pose z := fresh_in (C, π x, π \dot l); freshTacCtxt z.
+    rewrite (@eq_BCons _ _ _ _ _ z) -?actM => //.
+    apply HBcons => // t /mapP [reprt ?] ->.
+    exact/IHl.
+Qed.
