@@ -420,7 +420,7 @@ Lemma im_inv_fresh (X : nominalType atom) (π : {finperm atom}) a (x : X) :
   a # (π \dot x) -> (π^-1 a) # x.
 Proof. rewrite -{2}[x](actK π). by apply fresh_equiv. Qed.
 
-Lemma CFN_principle (X : nominalType atom) b a (x : X) :
+Lemma CFN_principle b {X : nominalType atom} {a} {x : X} :
   b # x -> swap a b \dot x = x -> a # x.
 Proof.
 move => bFx abx_eq_x.
@@ -431,7 +431,7 @@ Qed.
 Lemma fresh_atomP x y : reflect (x # y) (x != y). 
 Proof.
 apply: (iffP idP) => [xNy| [S] [xNS S_supp_y]].
-  apply (@CFN_principle _ (fresh_in y)); first exact: fresh1P.
+  apply (@CFN_principle (fresh_in y)); first exact: fresh1P.
   apply/tfinpermNone/andP; split; first by rewrite eq_sym.
   exact: fresh_neq.  
 apply/negP => /eqP x_eq_y.
@@ -485,7 +485,7 @@ split => //.
 exact: supportsP.
 Qed.
 
-Lemma fresh_transp {X : nominalType atom} (a b : atom) (x : X) :
+Lemma act_fresh {X : nominalType atom} (a b : atom) (x : X) :
       a # x -> b # x -> swap a b \dot x = x.
 Proof.
 move => [Sa [aNSa supp_Sa_x]] [Sb [bNSb supp_Sb_x]]. 
@@ -621,6 +621,15 @@ Definition equivariant3 X Y Z W (f :  X -> Y -> Z -> W) :=
 Definition equivariant_prop X Y (R : X -> Y -> Prop) :=
   forall π x y, R (π \dot x) (π \dot y) <-> R x y.
 
+Lemma all2_equivariant {A : nominalType atom} (s1 s2 : seq A) (p : A -> A -> bool) π :
+  equivariant2 p -> 
+  all2 p (π \dot s1) (π \dot s2) = all2 p s1 s2.  
+Proof.
+move => p_equi.
+rewrite all2_map. apply all2_eq => x y.
+exact/p_equi.
+Qed. 
+
 Lemma equi_funprop X Y Z (f : X -> Y -> Z) (R : Z -> Z -> Prop) :
   equivariant2 f -> equivariant_prop R -> 
   equivariant_prop (fun (x : X) (y : Y * Y) => R (f x y.1) (f x y.2)). 
@@ -692,7 +701,7 @@ End FinitelySupportedFunctions.
 (* (* apply/fsubsetP => a /imfsetP [b bx] ->. apply contraT => πbNπx. *) *)
 (* (* set c := fresh_in (val b, im π^-1 (support (π \dot x))). *) *)
 (* (* have : swap (val b) c \dot x = x. *) *)
-(* (*   apply (@act_inj _ π). rewrite -actM tfinperm_conj actM fresh_transp //. *) *)
+(* (*   apply (@act_inj _ π). rewrite -actM tfinperm_conj actM act_fresh //. *) *)
 (* (*     exact: fresh_support πbNπx. *) *)
 (* (*   exists (support (π \dot x)). *) *)
 (* (*   split; last exact: supportsP. *) *)
@@ -732,11 +741,11 @@ move => Requi; split.
   - exists (support x) => a /fresh_fsetP/fresh_support. exact: (H a).
   - move => [S aNSR].
     apply/(Requi (swap (fresh_in x) (fresh_in (x,S)))).
-    rewrite swapL [_ \dot x]fresh_transp; try (by freshTac). 
+    rewrite swapL [_ \dot x]act_fresh; try (by freshTac). 
     apply/aNSR. by freshTac.
   - move => Rfresh. exists (fresh_in x) => //. exact: fresh1P.
   - move => [a a_fresh_x rax] a' a'_fresh_x.
-    rewrite -[a'](tfinpermL a a') -[x](@fresh_transp _ a a') //. 
+    rewrite -[a'](tfinpermL a a') -[x](@act_fresh _ a a') //. 
     by apply/Requi.
 Qed.
 

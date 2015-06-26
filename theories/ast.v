@@ -283,9 +283,9 @@ rewrite -act_conj_imL -[X in alpha_rec _ _ X]act_conj_imL.
 rewrite IHn; try rewrite -[RHS](@IHn _ _ (swap y (π^-1 z))).
   all: try (rewrite depth_perm; exact: IHl1). (* comment apliquer aux buts 2 et 3 ?) *)
 freshTacCtxt z; freshTacCtxt y.
-rewrite -{1}[t1](@fresh_transp _ y (π^-1 z)) //; try freshTacList;
+rewrite -{1}[t1](@act_fresh _ y (π^-1 z)) //; try freshTacList;
   last exact: im_inv_fresh.
-rewrite -{1}[t2](@fresh_transp _ y (π^-1 z)) //; try freshTacList;
+rewrite -{1}[t2](@act_fresh _ y (π^-1 z)) //; try freshTacList;
   last exact: im_inv_fresh. (* comment réécrire dans t1 et t2 à la fois ? *)
 rewrite 2?[in RHS]act_conj tfinpermL !tfinperm_fresh //.
 all: exact/im_inv_fresh. 
@@ -371,6 +371,7 @@ End AlphaEquivalence.
 Section Quotient.
 
 Variables (node_label : eqType) (leaf_type : nominalType atom).
+Notation rAST := (@rAST node_label leaf_type).
 
 Canonical alpha_equiv := 
   EquivRel (@alpha node_label leaf_type) 
@@ -425,40 +426,6 @@ rewrite all2_mapr. apply all2_refl => t _ /=.
 by rewrite alpha_equivariant alpha_eqE reprK.
 Qed.
 
-Lemma LeafK x : repr (Leaf x) = rLeaf node_label x. 
-Proof.
-have : alpha (repr (Leaf x)) (rLeaf node_label x). 
-(* comment ne pas avoir à spécifier node_lavel ? *)
-  by rewrite alpha_eqE reprK rLeafK. 
-by case: (repr (Leaf x)) => // ? /eqP ->. 
-Qed.
-
-Lemma ConsK c l : exists repr_l,
-    l = map \pi_AST repr_l /\ repr (Cons c l) = rCons c repr_l.
-Proof.
-have: alpha (repr (Cons c l)) (rCons c (map repr l)).
-  rewrite alpha_eqE reprK rConsK -map_comp map_id_in //. 
-  move => t _ /=. by rewrite reprK.
-case: (repr (Cons _ _)) => //= c2 l2;
-rewrite alphaE // => /andP [/eqP c2_eq_c] => /all2_alpha_eq. 
-rewrite -map_comp map_id_in => pil2_ll1; 
-  last by move => _ /=; rewrite reprK.
-by exists l2; split; last by rewrite c2_eq_c.
-Qed.
-
-Lemma Leaf_inj x y : Leaf x = Leaf y -> x = y.
-Proof. move/(congr1 repr). rewrite !LeafK => H. by injection H. Qed.
-
-Lemma Cons_inj c1 c2 l1 l2 : 
-  Cons c1 l1 = Cons c2 l2 -> c1 = c2 /\ l1 = l2.
-Proof.
-move/(congr1 repr). 
-have [reprl1 [-> ->]] := ConsK c1 l1.
-have [reprl2 [-> ->]] := ConsK c2 l2.
-move => H.
-by injection H => -> ->. 
-Qed.
-
 End Quotient.
 
 Section NominalAST.
@@ -466,6 +433,7 @@ Section NominalAST.
 Variables (node_label : eqType) (leaf_type : nominalType atom).
 
 Implicit Types (π : {finperm atom}) (t : AST node_label leaf_type).
+Local Notation rAST := (rAST node_label leaf_type).
 Local Notation AST := (AST node_label leaf_type).
 Local Notation AST_choiceType := (AST_choiceType node_label leaf_type).
 
@@ -506,12 +474,161 @@ Canonical AST_nominalType := @NominalType atom AST_choiceType AST_nominal_mixin.
 
 End NominalAST.
 
-Record AST_Instance := 
-  ASTInstance {
-      X : Type;
-      node_label : Type;
-      leaf_type : nominalType atom;
-      encode : X -> rAST node_label leaf_type;
-      decode : rAST node_label leaf_type -> X;
-      _ : cancel encode decode
-}.
+Section VariousLemmas.
+
+Variables (node_label : eqType) (leaf_type : nominalType atom).
+
+
+Local Notation rAST := (rAST node_label leaf_type).
+Local Notation AST := (AST node_label leaf_type).
+Local Notation Leaf := (@Leaf node_label leaf_type).
+Local Notation Cons := (@Cons node_label leaf_type).
+Local Notation BinderCons := (@BinderCons node_label leaf_type).
+Local Notation alpha := (@alpha node_label leaf_type).
+Local Notation repr := (@repr rAST (AST_quotType node_label leaf_type)).
+
+Lemma pi_equivariant π (t : rAST) : 
+  π \dot (\pi_AST t) = \pi_AST (π \dot t).
+Proof.
+apply/eqmodP => /=. 
+by rewrite alpha_equivariant alpha_eqE reprK. 
+Qed.
+
+Lemma repr_equivariant π (t : AST) : repr (π \dot t) == π \dot (repr t) %[mod AST]. 
+Proof. by rewrite -pi_equivariant !reprK. Qed.
+
+Lemma Leaf_equivariant π x : π \dot (Leaf x) = Leaf (π \dot x).
+Proof. by rewrite -rLeafK pi_equivariant /= rLeafK. Qed.
+
+Lemma Cons_equivariant π c l : 
+  π \dot (Cons c l) = Cons c (π \dot l).
+Proof.
+unlock Cons. rewrite pi_equivariant !rConsK -!map_comp. 
+congr Cons.
+apply/sym_eq/eq_map => t /=.
+exact/eqP/repr_equivariant.
+Qed.
+
+Lemma BinderCons_equivariant π c x l :
+  π \dot (BinderCons c x l) = BinderCons c (π x) (π \dot l).
+Proof.
+unlock BinderCons. rewrite pi_equivariant !rBinderConsK -!map_comp.
+congr BinderCons.
+apply/sym_eq/eq_map => t /=.
+exact/eqP/repr_equivariant.
+Qed.
+
+Lemma LeafK x : repr (Leaf x) = rLeaf node_label x. 
+Proof.
+have : alpha (repr (Leaf x)) (rLeaf node_label x). 
+(* comment ne pas avoir à spécifier node_lavel ? *)
+  by rewrite alpha_eqE reprK rLeafK. 
+by case: (repr (Leaf x)) => // ? /eqP ->. 
+Qed.
+
+Lemma ConsK c l : exists repr_l,
+    l = map \pi_AST repr_l /\ repr (Cons c l) = rCons c repr_l.
+Proof.
+have: alpha (repr (Cons c l)) (rCons c (map repr l)).
+  rewrite alpha_eqE reprK rConsK -map_comp map_id_in //. 
+  move => t _ /=. by rewrite reprK.
+case: (repr (Cons _ _)) => //= c2 l2;
+rewrite alphaE // => /andP [/eqP c2_eq_c] => /all2_alpha_eq. 
+rewrite -map_comp map_id_in => pil2_ll1; 
+  last by move => _ /=; rewrite reprK.
+by exists l2; split; last by rewrite c2_eq_c.
+Qed.
+
+Lemma BConsK c x (l : seq AST) : exists y (repr_l : seq rAST),
+   \new z, (map \pi (swap y z \dot repr_l) = swap x z \dot l) /\ 
+   repr (BinderCons c x l) = rBinderCons c y repr_l.
+Proof.
+have: alpha (repr (BinderCons c x l)) (rBinderCons c x (map repr l)).
+  rewrite alpha_eqE reprK rBinderConsK -map_comp map_id_in //. 
+  move => t _ /=. by rewrite reprK.
+case: (repr (BinderCons _ _ _)) => //= c2 x2 l2 /alpha_BConsP [c2_eq_c [S HS]].
+exists x2; exists l2. split; last by rewrite c2_eq_c.
+exists S => z /HS. 
+rewrite -all2_map => /all2_alpha_eq. 
+rewrite listactE -!map_comp => ->.
+apply eq_map => t /=. by rewrite -pi_equivariant reprK.
+Qed.
+
+Lemma Leaf_inj : injective Leaf.
+Proof. move => x y /(congr1 repr). rewrite !LeafK => H. by injection H. Qed.
+
+Lemma Cons_inj c1 c2 l1 l2 : 
+  Cons c1 l1 = Cons c2 l2 -> c1 = c2 /\ l1 = l2.
+Proof.
+move/(congr1 repr). 
+have [reprl1 [-> ->]] := ConsK c1 l1.
+have [reprl2 [-> ->]] := ConsK c2 l2.
+move => H.
+by injection H => -> ->. 
+Qed.
+
+Lemma BConsx_inj c x : injective (BinderCons c x).
+Proof.
+unlock BinderCons. move => l1 l2 /eqP.
+rewrite -alpha_eqE alphaE eqxx /= (@all2_eq _ _ _ _ alpha).
+  move/all2_alpha_eq. rewrite -!map_comp !map_id_in // => ? _ /=;
+  by rewrite reprK.
+move => t1 t2; by rewrite alpha_equivariant.
+Qed.
+
+Lemma fresh_repr x t : x # (repr t) -> x # t.
+Proof.
+move => [S [xNS S_supp_t]].
+exists S; split => //.
+move => π H. by rewrite -[t]reprK pi_equivariant (S_supp_t π) //.
+Qed.
+
+Lemma fresh_Leaf x y : x # (Leaf y) <-> x # y.
+Proof.
+split => [[S] [xNS S_supp_Ly]|xFy].
+  exists S; split => // π HS.
+  apply Leaf_inj. rewrite -Leaf_equivariant.
+  exact: S_supp_Ly.   
+apply (@CFN_principle (fresh_in (y, Leaf y))); first by freshTac.
+rewrite Leaf_equivariant act_fresh //; by freshTac.
+Qed.
+
+Lemma fresh_Cons x c l : x # (Cons c l) -> x # l.
+Proof.
+move => [S] [xNS S_supp_cl].
+exists S; split => // π HS.
+eapply proj2; apply Cons_inj. rewrite -Cons_equivariant.
+exact: S_supp_cl.
+Qed.
+
+(* Lemma fresh_BCons x y c l : x # (BinderCons c y l) -> x = y \/ x # l. *)
+(* Proof. *)
+(* move => [S] [xNS S_supp_cyl]. *)
+(* have [x_eq_y|/fresh_atomP x_neq_y] := boolP (x == y). *)
+(*   by left; exact/eqP. *)
+(* right. exists S; split => // π HS. *)
+(* apply (@BConsx_inj c (π y)). rewrite -BinderCons_equivariant. *)
+
+Lemma eq_Bcons c x y l :
+  y # x -> y # l -> BinderCons c x l = BinderCons c y (swap x y \dot l).
+Proof.
+move => xFy xFl.
+unlock BinderCons; apply/eqmodP => /=.
+rewrite alphaE eqxx /= all2_map all2_mapr.
+apply all2_refl => t tl; set z := fresh_in _; freshTacCtxt z.
+rewrite alpha_eqE -!pi_equivariant !reprK.
+rewrite act_conj tfinpermL tfinperm_fresh //.
+rewrite [swap y z \dot t]act_fresh //; first by freshTacList.
+move: tl => /(map_f repr) /= ?.
+apply fresh_repr; by freshTacList.
+Qed.
+
+Lemma bname_fresh x c l : x # (BinderCons c x l).
+Proof.
+pose y := fresh_in (x, l, BinderCons c x l); freshTacCtxt y.
+apply (@CFN_principle y) => //.
+rewrite BinderCons_equivariant tfinpermL.
+exact/sym_eq/eq_Bcons.
+Qed.
+
+End VariousLemmas.

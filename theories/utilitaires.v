@@ -93,6 +93,14 @@ move => x1 x2 x1s1 x2s2. apply p1_eq_p2;
 by rewrite inE (x1s1, x2s2) orbT.
 Qed.
 
+Lemma all2_eq {A : eqType} (s1 s2 : seq A) (p1 p2 : A -> A -> bool) :
+  p1 =2 p2 -> all2 p1 s1 s2 = all2 p2 s1 s2.
+Proof.
+move => p1_eq_p2.
+apply eq_in_all2 => t1 t2 _ _. 
+exact/p1_eq_p2.
+Qed.
+
 Lemma all2_prop_eq {A : Type} (s1 s2 : seq A) :
   all2_prop eq s1 s2 <-> s1 = s2.
 Proof.
@@ -103,7 +111,7 @@ injection a1s1_eq_a2s2 => <- ->; split => //.
 exact/IHs1.
 Qed.
 
-Lemma all2_map {A : eqType} (s1 s2 : seq A) (p : A -> A -> bool) (f g : A -> A) :
+Lemma all2_map {A B : eqType} (s1 s2 : seq A) (p : B -> B -> bool) (f g : A -> B) :
   all2 p (map f s1) (map g s2) = all2 (fun x y => p (f x) (g y)) s1 s2.
 Proof.
 elim: s1 s2. by case.
