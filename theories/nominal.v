@@ -4,7 +4,6 @@ Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
 From MathComp
 Require Import bigop  finfun finset generic_quotient perm tuple fingroup.
 
-From Nominal
 Require Import finmap finsfun finperm utilitaires.
 
 Set Implicit Arguments.
@@ -646,41 +645,28 @@ Qed.
 
 End EquivariantFunctions.
 
-Section FinitelySupportedFunctions.
+(* Section FinitelySupportedFunctions. *)
 
-Implicit Types (V W X Y Z : nominalType atom) (π : {finperm atom}) (S : {fset atom}).
+(* Implicit Types (V W X Y Z : nominalType atom) (π : {finperm atom}) (S : {fset atom}). *)
 
-Definition function_support1 X Y (f : X -> Y) S :=
-  forall π, [disjoint S & (finsupp π)] -> forall x, π \dot (f x) = f (π \dot x).
+(* Definition fsupports1 {X Y} (f : X -> Y) S :=  *)
+(*   forall a b x, (swap a b) \dot (f x) = f (swap a b \dot x). *)
 
-Definition finitely_supported1 X Y (f : X -> Y) := 
-  exists S, function_support1 f S.
+(* Definition finitely_supported1 X Y (f : X -> Y) :=  *)
+(*   exists S, fsupports1 f S. *)
 
-Definition function_support2 X Y Z (f : X -> Y -> Z) S :=
-  forall π, [disjoint S & (finsupp π)] -> 
-            forall x y, π \dot (f x y) = f (π \dot x) (π \dot y).
+(* Definition fsupports2 X Y Z (f : X -> Y -> Z) S := *)
+(*    forall a b x y, swap a b \dot (f x y) =  *)
+(*                    f (swap a b \dot x) (swap a b \dot y). *)
 
-Definition finitely_supported2 X Y Z (f : X -> Y -> Z) := 
-  exists S, function_support2 f S.
+(* Definition finitely_supported2 X Y Z (f : X -> Y -> Z) :=  *)
+(*   exists S, fsupports2 f S. *)
 
+(* Definition fsupports *)
 
-Definition function_support3 X Y Z W (f : X -> Y -> Z -> W) S :=
-  forall π, [disjoint S & (finsupp π)] -> 
-            forall x y z,  π \dot (f x y z) = f (π \dot x) (π \dot y) (π \dot z).
+(* Definition function_support *)
 
-Definition finitely_supported3 X Y Z W (f : X -> Y -> Z -> W ) := 
-  exists S, function_support3 f S.
-
-Definition function_support4 X Y Z W V (f : X -> Y -> Z -> W -> V) S :=
-  forall π, [disjoint S & (finsupp π)] -> 
-            forall x y z w, 
-              π \dot (f x y z w) =
-              f (π \dot x) (π \dot y) (π \dot z) (π \dot w).
-
-Definition finitely_supported4 X Y Z W V (f : X -> Y -> Z -> W -> V) := 
-  exists S, function_support4 f S.
-
-End FinitelySupportedFunctions.
+(* End FinitelySupportedFunctions. *)
 
 (* Section StrongSupport. *)
 

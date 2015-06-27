@@ -178,6 +178,15 @@ move => H /all2P Hs1s2 /all2P Hs2s3; apply/all2P.
 move: Hs1s2 Hs2s3. exact/all2_prop_trans.
 Qed.
 
+Lemma all2_quot {A : eqType} {B} (s1 s2 : seq A) (p : A -> A -> bool) (f : A -> B):
+  (forall x y, x \in s1 -> y \in s2 -> p x y -> f x = f y) -> all2 p s1 s2 ->
+  map f s1 = map f s2.
+Proof.
+elim: s1 s2 => [[|? ?]|a1 s1 IHs1 [|a2 s2]] //= f_equalizer => /andP [pa1a2 ps1s2].
+rewrite (f_equalizer a1 a2) ?mem_head // (IHs1 s2) // => x1 x2 x1s1 x2s2.
+by apply/f_equalizer; rewrite in_cons (x1s1, x2s2) orbT.
+Qed.
+
 Lemma and_iff_congr A B C D : (A <-> B) -> (C <-> D) -> (A /\ C) <-> (B /\ D). 
 Proof.
 move => A_eq_B C_eq_D.
