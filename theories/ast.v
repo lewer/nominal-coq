@@ -221,10 +221,9 @@ Fixpoint alpha_rec (n : nat) (W1 W2 : rAST ) :=
     |S n, rBinderCons c1 x children1, rBinderCons c2 y children2 =>
      (c1 == c2) && 
      (let z := fresh_in (x, children1, y, children2) in
-                    all2
-                      (fun w1 w2 => alpha_rec n (swap x z \dot w1) (swap y z \dot w2))
-                      children1
-                      children2)
+      all2 (alpha_rec n)
+           (swap x z \dot children1)
+           (swap y z \dot children2))
     |_, _,_ => false
   end.
 
@@ -245,7 +244,7 @@ elim: n W1 W2 => // [|n ihn] [x|c1 l1|c1 x1 l1] [y|c2 l2|c2 x2 l2] [|m] //.
     exact/in_maxlist/map_f.
   - rewrite ltnS => m_leq_n /(@rdepth_bcons_leq _ _ _ _) /allP IHl1 /=. 
     apply andb_id2l => _. 
-    apply eq_in_all2 => t1 t2 t1l2 t2l2.
+    apply eq_in_all2 => t1 t2 /mapP [?] ? -> /mapP [?] ? ->.
     rewrite !ihn //; try rewrite rdepth_perm; last exact/IHl1;
       last exact/in_maxlist/map_f.
     apply (@leq_trans m) => //. 
@@ -273,10 +272,11 @@ Lemma alpha_BinderConsE (c1 c2 : bcons_label) x1 x2 l1 l2  :
   alpha (rBinderCons c1 x1 l1) (rBinderCons c2 x2 l2) = 
   (c1 == c2) &&
   let z := fresh_in (x1,l1,x2,l2) in
-  all2 (fun w1 w2 => alpha (swap x1 z \dot w1) (swap x2 z \dot w2)) l1 l2.
+  all2 alpha (swap x1 z \dot l1) (swap x2 z \dot l2).
 Proof. 
 rewrite /alpha /=. 
-apply andb_id2l => _. apply eq_in_all2 => t1 t2 ? ?.
+apply andb_id2l => _. 
+apply eq_in_all2 => t1 t2 /mapP [?] ? -> /mapP [?] ? ->. 
 rewrite alpha_recE // rdepth_perm.
 exact/in_maxlist/map_f.
 Qed.
@@ -293,8 +293,8 @@ elim: n W1 W2 π => [|n IHn] [x1|c1 l1|c1 x1 l1] [x2|c2 l2|c2 x2 l2] π //=.
   rewrite inj_eq //. exact: act_inj.
   (* comment appliquer aux deux sous-buts sans recopier ? *)
 all: rewrite ltnS => /maxlist_map_leqP IHl1.
-all: apply andb_id2l => _.
-all: rewrite all2_map; apply eq_in_all2 => t1 t2 t1l1 t2l2.
+all: apply andb_id2l => _. 
+all: rewrite !all2_map; apply eq_in_all2 => t1 t2 ? ?.
   exact/IHn/IHl1.
 set z := fresh_in _; set y := fresh_in _.
 rewrite -act_conj_imL -[X in alpha_rec _ _ X]act_conj_imL.
@@ -308,6 +308,13 @@ rewrite -{1}[t2](@act_fresh _ y (π^-1 z)) //; try freshTacList;
 rewrite 2?[in RHS]act_conj tfinpermL !tfinperm_fresh //.
 all: exact/im_inv_fresh. 
 Qed.
+
+(* Lemma alpha_equivariantR {W1 W2 : rAST} {π1 π2 : {finperm atom}} x y : *)
+(*       alpha (π1 \dot W1) (π2 \dot W2) =  *)
+(*       alpha (π1 \dot (swap x y) \dot W1) (π2 \dot (swap x y) \dot W2). *)
+(* Proof. *)
+
+(*  by rewrite !alpha_equivariant. Qed. *)
 
 Lemma alpha_equivariantprop : equivariant_prop alpha.
 Proof. move => π t t' /=. by rewrite alpha_equivariant. Qed.
@@ -323,9 +330,10 @@ move : (equi_funprop (@swap_equiv _) alpha_equivariantprop) => /= Requi.
 rewrite alphaE.
 apply/(equivP andP); apply and_iff_congr => /=.
   by symmetry; apply (rwP eqP).
+rewrite all2_map.
 eapply iff_stepl. by symmetry; apply new_all2.
-eapply iff_stepl. by apply (rwP (@all2P _ _ _ _)). (* comment faire plus élégant ?*)
-apply eq_in_all2_prop => t1 t2 t1l1 t2l2.
+eapply iff_stepl. by apply (rwP (@all2P _ _ _ _)). 
+apply/eq_in_all2_prop => t1 t2 t1l1 t2l2.
 apply (@some_fresh_new _ _ Requi _ ((x1, t1), (x2, t2))).
 freshTac => *.
 apply/fresh_prod; split; apply/fresh_prod;split => //.
@@ -337,6 +345,7 @@ Proof.
 elim/rAST_better_ind => [s|c l|c x l]; rewrite alphaE eqxx //= => Hrefl.
 all: apply all2_refl => t.
   exact/Hrefl.
+move/mapP => [?] ? ->. 
 rewrite alpha_equivariant. exact/Hrefl.
 Qed.
 
@@ -348,6 +357,7 @@ elim: n t1 t2 => [|n IHn] [x1|c1 l1|c1 x1 l1] [x2|c2 l2|c2 x2 l2] //=;
 rewrite eq_sym.
 all: rewrite ltnS => /maxlist_map_leqP depth_l1_leqn.
 all: apply andb_id2l => _.
+2: rewrite !all2_map.
 all: apply all2_sym => t1 t2 t1l1 t2l2.
 all: rewrite /switch IHn ?rdepth_perm; last by apply depth_l1_leqn.
   exact/sym_eq/alpha_recE/in_maxlist/map_f.
@@ -440,9 +450,11 @@ Definition BinderCons c x := lift_map (rBinderCons c x).
 Lemma rBinderConsK c x l : \pi_AST (rBinderCons c x l) = BinderCons c x (map \pi_AST l).
 Proof.
 unlock BinderCons; apply/eqP.
-rewrite [_ == _]piE alphaE eqxx /= -map_comp.
-rewrite all2_mapr. apply all2_refl => t _ /=.
-by rewrite alpha_equivariant alpha_eqE reprK.
+rewrite [_ == _]piE alphaE eqxx /=. 
+rewrite all2_equivariant; 
+  last by move => ? ? ?; rewrite alpha_equivariant.
+rewrite -map_comp all2_mapr. apply all2_refl => t _ /=.
+by rewrite alpha_eqE reprK.
 Qed.
 
 End Quotient.
@@ -536,6 +548,53 @@ apply/sym_eq/eq_map => t /=.
 exact/eqP/repr_equivariant.
 Qed.
 
+Lemma fresh_repr x t : x # (repr t) -> x # t.
+Proof.
+move => [S [xNS S_supp_t]].
+exists S; split => //.
+move => π H. by rewrite -[t]reprK pi_equivariant (S_supp_t π) //.
+Qed.
+
+Lemma fresh_pi x t : x # t -> x # (\pi_AST t).
+Proof.
+move => [S [xNS S_supp_t]].
+exists S; split => //.
+move => π H. by rewrite pi_equivariant (S_supp_t π).
+Qed.
+
+Lemma fresh_list_repr x l : x # (map repr l) -> x # l.
+Proof.
+move => ?.
+apply fresh_list => ? /(map_f repr) ?. 
+apply fresh_repr; by freshTacList.
+Qed.
+
+Lemma fresh_list_pi x l : x # l -> x # (map \pi_AST l).
+move => ?.
+apply fresh_list => ? /mapP [?] ? ->.
+apply fresh_pi. by freshTacList.
+Qed.
+
+Lemma eq_BConsE c x1 x2 l1 l2 :
+  BinderCons c x1 l1 = BinderCons c x2 l2 ->
+  forall z, z # x1 -> z # x2 -> z # l1 -> z # l2 -> 
+             swap x2 z \dot l2 = swap x1 z \dot l1.
+Proof.
+unlock BinderCons => /eqP. 
+rewrite -alpha_eqE alphaE eqxx /= => /all2_alpha_eq.
+set z := fresh_in _. 
+rewrite -!map_equivariant;
+  try solve [move => *; exact: pi_equivariant].
+rewrite !mapK;
+  try solve [move => *; exact: reprK].
+move => x1zl1_x2zl2 z' *.
+freshTacCtxt z.
+apply (@act_inj _ _ (swap z z')).
+rewrite [in LHS]act_conj [in RHS]act_conj !tfinpermR !tfinperm_fresh //. 
+rewrite ![swap z z' \dot _]act_fresh //.
+all: exact: fresh_list_repr.
+Qed.
+
 Lemma LeafK x : repr (Leaf x) = rLeaf cons_label bcons_label x. 
 Proof.
 have : alpha (repr (Leaf x)) (rLeaf cons_label bcons_label x). 
@@ -557,19 +616,15 @@ rewrite -map_comp map_id_in => pil2_ll1;
 by exists l2; split; last by rewrite c2_eq_c.
 Qed.
 
-Lemma BConsK c x (l : seq AST) : exists y (repr_l : seq rAST),
-   \new z, (map \pi (swap y z \dot repr_l) = swap x z \dot l) /\ 
+Lemma BConsK c (x : atom) (l : seq AST) : exists (y : atom) (repr_l : seq rAST),
    repr (BinderCons c x l) = rBinderCons c y repr_l.
 Proof.
 have: alpha (repr (BinderCons c x l)) (rBinderCons c x (map repr l)).
   rewrite alpha_eqE reprK rBinderConsK -map_comp map_id_in //. 
   move => t _ /=. by rewrite reprK.
-case: (repr (BinderCons _ _ _)) => //= c2 x2 l2 /alpha_BConsP [c2_eq_c [S HS]].
-exists x2; exists l2. split; last by rewrite c2_eq_c.
-exists S => z /HS. 
-rewrite -all2_map => /all2_alpha_eq. 
-rewrite listactE -!map_comp => ->.
-apply eq_map => t /=. by rewrite -pi_equivariant reprK.
+case: (repr (BinderCons _ _ _)) => //= c2 x2 l2.
+rewrite alphaE => /andP [/eqP ->] /= H. 
+by exists x2; exists l2. 
 Qed.
 
 Lemma AST_caseP (t : AST) :
@@ -600,19 +655,13 @@ Qed.
 
 Lemma BConsx_inj c x : injective (BinderCons c x).
 Proof.
-unlock BinderCons. move => l1 l2 /eqP.
-rewrite -alpha_eqE alphaE eqxx /= (@all2_eq _ _ _ _ alpha).
-  move/all2_alpha_eq. rewrite -!map_comp !map_id_in // => ? _ /=;
-  by rewrite reprK.
-move => t1 t2; by rewrite alpha_equivariant.
-Qed.
-
-Lemma fresh_repr x t : x # (repr t) -> x # t.
-Proof.
-move => [S [xNS S_supp_t]].
-exists S; split => //.
-move => π H. by rewrite -[t]reprK pi_equivariant (S_supp_t π) //.
-Qed.
+move => l1 l2; 
+pose z := fresh_in (x, l1, l2). 
+move => /eq_BConsE /(_ (fresh_in (x, l1, l2))) H.
+apply/(@act_inj _ _ (swap x z))/sym_eq.
+freshTacCtxt z.
+exact/H.
+Qed. 
 
 Lemma fresh_Leaf x y : x # (Leaf y) <-> x # y.
 Proof.
@@ -632,20 +681,36 @@ eapply proj2; apply Cons_inj. rewrite -Cons_equivariant.
 exact: S_supp_cl.
 Qed.
 
-(* Lemma fresh_BCons x y c l : x # (BinderCons c y l) -> x = y \/ x # l. *)
-(* Proof. *)
-(* move => [S] [xNS S_supp_cyl]. *)
-(* have [x_eq_y|/fresh_atomP x_neq_y] := boolP (x == y). *)
-(*   by left; exact/eqP. *)
-(* right. exists S; split => // π HS. *)
-(* apply (@BConsx_inj c (π y)). rewrite -BinderCons_equivariant. *)
+Lemma fresh_rBCons x y c (l : seq rAST) : 
+  x # (rBinderCons c y l) -> x # y /\ x # l.
+Proof.                             
+move => [S] [xNS S_supp_cyl].
+split; exists S; split => // π Hπ.
+all: by move: (S_supp_cyl π Hπ) => /= H; injection H => *.
+Qed.
 
+Lemma fresh_BCons x y c l : 
+  x # y -> x # (BinderCons c y l) -> x # l.
+Proof.
+move => [S] [xNS S_supp_y] [S'] [xNS' S'_supp_cyl].
+exists (S `|` S'); split.
+  by rewrite in_fsetU negb_or xNS xNS'.
+move => π Hπ. 
+apply/(@BConsx_inj c y).
+have y_eq_piy : π y = y.
+  apply S_supp_y => a aS. apply Hπ.
+  by rewrite in_fsetU aS.
+rewrite -{1}y_eq_piy -BinderCons_equivariant.
+apply S'_supp_cyl => a aS'. apply Hπ.
+by rewrite in_fsetU aS' orbT.
+Qed.
+  
 Lemma eq_BCons c x y l :
   y # x -> y # l -> BinderCons c x l = BinderCons c y (swap x y \dot l).
 Proof.
 move => xFy xFl.
 unlock BinderCons; apply/eqmodP => /=.
-rewrite alphaE eqxx /= all2_map all2_mapr.
+rewrite alphaE eqxx /= !all2_map all2_mapr. 
 apply all2_refl => t tl; set z := fresh_in _; freshTacCtxt z.
 rewrite alpha_eqE -!pi_equivariant !reprK.
 rewrite act_conj tfinpermL tfinperm_fresh //.
@@ -668,6 +733,7 @@ Section Depth.
 
 Variables (cons_label : eqType) (bcons_label : eqType) (leaf_label : nominalType atom).
 Local Notation rdepth := (@rAST_depth cons_label bcons_label leaf_label).
+Local Notation rAST := (rAST cons_label bcons_label leaf_label).
 Local Notation AST := (AST cons_label bcons_label leaf_label).
 Local Notation Leaf := (@Leaf cons_label bcons_label leaf_label).
 Local Notation Cons := (@Cons cons_label bcons_label leaf_label).
@@ -683,7 +749,8 @@ all: rewrite alphaE => /andP /= [_ l1_alpha_l2].
 all: apply eq_S; congr maxlist.
   apply (@all2_quot _ _ _ _ alpha) => // x y xl1 yl2. 
   exact/IHl1.
-eapply (@all2_quot _ _ _ _ ); last exact/l1_alpha_l2.
+eapply (@all2_quot _ _ _ _ ); last by 
+  move: l1_alpha_l2; rewrite all2_map; exact: id.
 move => t1 t2 t1l1 t2l2 /=; set z:= fresh_in _.
 rewrite -(alpha_equivariant _ _ (swap x1 z)) -actM tfinperm_idempotent act1.
 by move/IHl1; rewrite !rdepth_perm; auto.
@@ -692,6 +759,13 @@ Qed.
 Lemma depth_rdepth t : depth (\pi t) = rAST_depth t.
 Proof. 
 apply rdepth_alpha. by rewrite alpha_eqE reprK.
+Qed.
+
+Lemma depth_perm t π : depth (π \dot t) = depth t.
+Proof.
+rewrite/depth -[RHS](rdepth_perm π).
+apply rdepth_alpha. rewrite alpha_eqE.
+exact: repr_equivariant.
 Qed.
 
 Lemma depth_Leaf x : depth (Leaf x) = 0.
@@ -716,11 +790,14 @@ End Depth.
 Section EliminationPrinciples.
 
 Variables (cons_label : eqType) (bcons_label : eqType) (leaf_label : nominalType atom).
+Local Notation rAST := (rAST cons_label bcons_label leaf_label).
 Local Notation AST := (AST cons_label bcons_label leaf_label).
 Local Notation Leaf := (@Leaf cons_label bcons_label leaf_label).
 Local Notation Cons := (@Cons cons_label bcons_label leaf_label).
 Local Notation BinderCons := (@BinderCons cons_label bcons_label leaf_label).
 Local Notation rAST_depth := (@rAST_depth cons_label bcons_label leaf_label).
+Local Notation depth := (@depth cons_label bcons_label leaf_label).
+
 
 Lemma AST_naive_ind (P : AST -> Prop) :
   (forall x, P (Leaf x)) ->
@@ -763,38 +840,37 @@ Variables (X : nominalType atom)
           (f_leaf : leaf_label -> X)
           (f_cons : cons_label -> seq AST -> seq X -> X)
           (f_bcons : bcons_label -> atom -> seq AST -> seq X -> X)
-          (S_leaf : leaf_label -> {fset atom})
-          (S_cons : cons_label -> {fset atom})
-          (S_bcons : bcons_label -> {fset atom})
+          (Supp : {fset atom})
           (dflt : X).
 
 Hypothesis f_leaf_equivariant : 
-  forall a b x, a # S_leaf x -> b # S_leaf x -> 
-                swap a b \dot f_leaf x = f_leaf (swap a b \dot x).
+  forall (π : {finperm atom}) x, 
+    [disjoint finsupp π & Supp] -> π \dot f_leaf x = f_leaf (π \dot x).
 
 Hypothesis f_cons_equivariant :
-  forall a b c l l', a # S_cons c -> b # S_cons c ->
-                  swap a b \dot f_cons c l l' = 
-                  f_cons c (swap a b \dot l) (swap a b \dot l').
-
+  forall (π : {finperm atom}) c l l',
+    [disjoint finsupp π & Supp] ->
+                  π \dot f_cons c l l' = 
+                  f_cons c (π \dot l) (π \dot l').
 
 Hypothesis f_bcons_equivariant :
-  forall a b c x l l', a # S_bcons c -> b # S_bcons c ->
-     swap a b \dot f_bcons c x l l' = 
-     f_bcons c (swap a b \dot x) (swap a b \dot l) (swap a b \dot l').                 
+  forall (π : {finperm atom}) c x l l', 
+    [disjoint finsupp π & Supp] -> π \dot f_bcons c x l l' = 
+                                   f_bcons c (π x) (π \dot l) (π \dot l').                 
 
 Hypothesis FCB_fbcons :
-  forall x c l l', x # S_bcons c -> x # (f_bcons c x l l').
+  forall x c l l', x # Supp -> x # (f_bcons c x l l').
+
 
 Fixpoint AST_rect_rec (n : nat) (t : AST):=
   match n, (repr t) with
     |_, rLeaf x => f_leaf x
     |S n, rCons c l => f_cons c (map \pi l) (map (AST_rect_rec n) (map \pi l))
-    |S n, rBinderCons c x l => 
-     let z := fresh_in (S_bcons c) in
-     f_bcons c z 
-             (swap x z \dot (map \pi_AST l)) 
-             (swap x z \dot (map (AST_rect_rec n) (map \pi_AST l)))
+    |S n, rBinderCons c x l =>
+     let z := fresh_in (Supp, rBinderCons c x l) in
+     f_bcons c z
+             (swap x z \dot (map \pi_AST l))
+             (map (AST_rect_rec n) (swap x z \dot map \pi_AST l))
     |_, _ => dflt
   end.
 
@@ -812,7 +888,7 @@ case_eq (repr t) => [x|c l|x c l] //= ->;
 all: rewrite ltnS => IHl; try (congr f_cons); try (congr f_bcons).
 all: rewrite 2?listactE -!map_comp; apply eq_in_map => u ul /=.
 all: rewrite !IHn //; first exact/(@leq_trans m);
-    rewrite depth_rdepth; first exact/in_maxlist/map_f.
+     rewrite ?depth_perm depth_rdepth; first exact/in_maxlist /map_f.
 all: by eapply leq_trans; first apply/in_maxlist/map_f/ul.
 Qed.
 
@@ -830,3 +906,89 @@ apply AST_rect_recE => /=.
 exact/in_maxlist/map_f.
 Qed.
 
+Lemma AST_rect_BConsE_subproof c x l :
+  let z := (fresh_in (Supp, repr (BinderCons c x l))) in
+    AST_rect (BinderCons c x l) = 
+    f_bcons c z (swap x z \dot l) (map AST_rect (swap x z \dot l)).
+have [y [l'] repr_cxl] := BConsK c x l => /=.
+rewrite /AST_rect depth_BinderCons /= repr_cxl.
+set z := fresh_in _. 
+suff : swap y z \dot (map \pi_AST l') = swap x z \dot l.
+  move => ->. congr f_bcons.
+  apply eq_in_map => ? /mapP [?] ? ->. 
+  rewrite AST_rect_recE // depth_perm. exact/in_maxlist/map_f.
+move: (congr1 \pi_AST repr_cxl).
+rewrite reprK rBinderConsK => /eq_BConsE /(_ z) H.
+have : z # (rBinderCons c y l') by freshTac.
+move => /fresh_rBCons [? /fresh_list_pi ?].
+have [/eqP z_eq_x|/fresh_atomP ?] := boolP (z == x).
+  rewrite z_eq_x tfinperm_id act1.
+  move: (congr1 \pi_AST repr_cxl); rewrite reprK rBinderConsK.
+  rewrite [X in _ = X](@eq_BCons _ _ _ c y x) -?z_eq_x // => J.  
+  exact/BConsx_inj/sym_eq/J.
+apply H => //. apply/(@fresh_BCons _ _ _ _ x c) => //.
+apply fresh_repr; rewrite repr_cxl. 
+by freshTac.
+Qed.
+
+Definition equiv t := 
+  forall (π : {finperm atom}), [disjoint finsupp π & Supp] ->
+                               π \dot (AST_rect t) = 
+                               AST_rect (π \dot t).
+
+Definition res c x l := AST_rect (BinderCons c x l) =
+                        f_bcons c x l (map AST_rect l).
+
+Lemma equiv_res_subproof c x (l : seq AST) :
+(forall (t : AST), t \in l -> equiv t) ->
+x # Supp -> res c x l.
+Proof.
+move => Hequiv zFSupp.
+rewrite /res AST_rect_BConsE_subproof; set y := fresh_in _.
+set rhs := RHS; set lhs := LHS; rewrite /lhs/rhs.
+set a := fresh_in (lhs, rhs, Supp, l, x). 
+freshTacCtxt a. freshTacCtxt y.
+rewrite -[LHS](@act_fresh _ y a) //; last exact/FCB_fbcons.
+rewrite -[RHS](@act_fresh _ x a) //; last exact/FCB_fbcons.
+rewrite !f_bcons_equivariant;
+  try solve [exact/disjoint_tfsupp]. 
+rewrite !tfinpermL.
+rewrite -map_equivariant; 
+  last by move => ? ?; apply/Hequiv => //; apply/disjoint_tfsupp.
+have : y # BinderCons c x l by apply/fresh_repr.
+have [/eqP ->|/fresh_atomP zFx /(fresh_BCons zFx) ?] := boolP (y == x).
+  by rewrite tfinperm_id !act1.
+rewrite ![swap y a\dot _ \dot _]act_conj !tfinpermL !tfinperm_fresh //.
+rewrite [swap y a \dot l]act_fresh //.
+rewrite [swap y a \dot _]map_id_in // => t /mapP [?] ? ->.
+rewrite Hequiv //; last exact/disjoint_tfsupp.
+rewrite act_fresh //; by freshTacList.
+Qed.
+
+Lemma AST_rect_equivariant t :
+ equiv t.
+Proof.
+elim/(@AST_ind _ Supp): t => [v|c l IHl|c z l zFSupp IHl] π disj_pi_S.
+  - by rewrite !Leaf_equivariant !AST_rect_LeafE f_leaf_equivariant //.
+  - rewrite !Cons_equivariant !AST_rect_ConsE f_cons_equivariant //. 
+    rewrite [X in f_cons _ _ X]map_equivariant //; last by
+      move => t tl; exact/IHl.
+  - have Hres1 := (@equiv_res_subproof c _ _ IHl zFSupp).
+    have Hres2 : res c (π z) (π \dot l).
+      apply/equiv_res_subproof => //. 
+      move => t /mapP [?] ? -> π' ?.
+      rewrite -actM -!IHl // ?actM //; exact/disjoint_conj.
+      admit.
+    rewrite BinderCons_equivariant Hres1 Hres2. 
+    rewrite f_bcons_equivariant // map_equivariant //.
+    move => ? ?; exact/IHl.
+Admitted.
+
+Lemma AST_rect_BinderConsE c x l : 
+  x # Supp -> 
+  AST_rect (BinderCons c x l) = f_bcons c x l (map AST_rect l).
+Proof.
+move => xFsupp.
+apply/equiv_res_subproof => // ? ?. 
+exact/AST_rect_equivariant.
+Qed.

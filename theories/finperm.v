@@ -319,12 +319,18 @@ apply/eq_finPermP => z; case: tfinpermP;
 by move => zNab; rewrite tfinpermNone // andbC.
 Qed.
 
-
 Lemma tfinsfun_id a :
   tfinsfun a a = (1 K).
 Proof.
 apply/finsfunP => b; rewrite finsfun1.
 by case: tfinpermP; symmetry.
+Qed.
+
+Lemma tfinperm_id a :
+  tfinperm a a = (1 K).
+Proof.
+apply/eq_finPermP => x /=.
+by rewrite tfinsfun_id /=.
 Qed.
 
 Lemma tfinperm_idempotent a b :

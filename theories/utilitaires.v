@@ -53,7 +53,7 @@ Fixpoint all2 {A : eqType} (p : A -> A -> bool) (l1 l2 : seq A) :=
     |_, _ => false
   end.
 
-Fixpoint all2_prop {A : Type} (p : A -> A -> Prop) (l1 l2 : seq A) :=
+Fixpoint all2_prop {A B : Type} (p : A -> B -> Prop) (l1 : seq A) (l2 : seq B) :=
   match l1, l2 with
     |[::], [::] => True
     |a::q, b::r => (p a b) /\ all2_prop p q r

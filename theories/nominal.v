@@ -534,19 +534,29 @@ all: move : (S_supp_xl π HS) => /= /eqP.
 all: by rewrite !listactE /= eqseq_cons => /andP [/eqP ? /eqP ?]. 
 Qed.
 
-Lemma fresh_cons {X} (l : seq X) a x : a # (x :: l) -> a # x /\ a # l.
+Lemma fresh_cons {X} (l : seq X) a x : a # (x :: l) <-> a # x /\ a # l.
 Proof.
-move => [S] [aNS /supports_cons [S_supp_x S_supp_l]]. 
 split.
-all: by exists S; split => //. 
-Qed.
-    
-Lemma fresh_list {X} (l : seq X) a : a # l -> forall x, x \in l -> a # x.
+  move => [S] [aNS /supports_cons [S_supp_x S_supp_l]]. 
+  split; by exists S; split => //. 
+move => [[Sa] [aNSa Sa_supp_x] [Sl] [aNSl Sl_supp_l]].
+exists (Sa `|` Sl); split.
+  by rewrite in_fsetU negb_or aNSa aNSl.
+move => π H. 
+Admitted.
+
+Lemma fresh_list {X} (l : seq X) a : a # l <-> forall x, x \in l -> a # x.
 Proof. 
-elim: l => // x l IHl /fresh_cons [aFx aFl] y. 
-rewrite inE => /orP. case.
-  by move /eqP ->.
-exact: IHl.
+elim: l => [|b l IH]. 
+  split => // ?; exact/fresh_nil.
+split => [/fresh_cons [aFb aFl] y|Hbl]. 
+   rewrite inE => /orP. case.
+    by move /eqP ->.
+  exact/(iffLR IH aFl).
+apply fresh_cons; split.
+  exact/Hbl/mem_head.
+apply IH => x xl; apply/Hbl.
+by rewrite in_cons xl orbT.
 Qed.
 
 Lemma fresh_perm (X : nominalType atom) (π : {finperm atom}) (x : X) : 
@@ -564,17 +574,25 @@ apply/tfinpermNone/andP; split.
 all: exact/fresh_atomP/fresh_atomC.
 Qed.
 
+Lemma disjoint_tfsupp a b S :
+  a # S -> b # S -> [disjoint finsupp (swap a b) & S].
+Proof.
+move => aFS bFS. rewrite fdisjoint_sym.
+by apply/tfinperm_disj; exact/fresh_fsetP.
+Qed.
+
+Lemma disjoint_conj (π π' : {finperm atom}) T :
+  [disjoint finsupp π & T] -> [disjoint finsupp π' & T] ->
+  [disjoint finsupp (π * π') & T].
+Proof.
+move => /fdisjointP disj_pi_T /fdisjointP disj_pi'_T.
+apply/fdisjointP => a /(fsubsetP (finsupp_conj π' π) a).
+by rewrite in_fsetU => /orP [?|?]; auto.
+Qed.
+
 End Freshness.
 
 Notation "a # x" := (fresh a x) (x at level 60, at level 60).
-
-Ltac freshTacList :=
-  match goal with
-  | |- ?z # ?t  => 
-    match goal with 
-      | [ H : is_true (t \in ?l) |- _] => apply (@fresh_list _ l) => //
-    end
-end.
 
 Ltac freshTac :=
   match goal with
@@ -599,6 +617,14 @@ Ltac freshTacCtxt z :=
     (move/fresh_prod;
      case);
   move => *.
+
+Ltac freshTacList :=
+  match goal with
+  | |- ?z # ?t  => 
+    match goal with 
+      | [ H : is_true (t \in ?l) |- _] => apply (@fresh_list _ l) => //
+    end
+end.
       
 
 (* fresh_dec (e : list { X : nominalType & X }) nom : is_fresh_dec x y -> is_fresh (fresh_in (interp e x)) (interp e y) *)
@@ -628,6 +654,16 @@ move => p_equi.
 rewrite all2_map. apply all2_eq => x y.
 exact/p_equi.
 Qed. 
+
+Lemma map_equivariant {A B : nominalType atom} (f : A -> B) l π : 
+  (forall x, x \in l -> π \dot f x = f (π \dot x)) ->
+   π \dot (map f l) = map f (π \dot l).
+Proof.  
+move => f_equiv.
+rewrite listactE -!map_comp. 
+apply eq_in_map => t tl /=.
+exact/f_equiv.
+Qed.
 
 Lemma equi_funprop X Y Z (f : X -> Y -> Z) (R : Z -> Z -> Prop) :
   equivariant2 f -> equivariant_prop R -> 

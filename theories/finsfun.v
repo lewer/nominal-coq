@@ -179,6 +179,14 @@ have fk_eq_fk' : f k = f k' by exact: (g_inj _ _ gfk_eq_gfk').
 exact: (f_inj _ _ fk_eq_fk').
 Qed.
 
+Lemma finsupp_conj f g : 
+  finsupp (g * f) `<=` (finsupp f `|` finsupp g).
+Proof.
+apply/fsubsetP => a. apply/contraLR.
+rewrite in_fsetU negb_or !mem_finsupp !negbK finsfunM /=. 
+by move => /andP [/eqP -> /eqP ->].
+Qed.
+
 End FinSFunIdTheory.
 
 Section InjectiveFinSFun.
