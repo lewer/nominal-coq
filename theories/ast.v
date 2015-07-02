@@ -16,9 +16,11 @@ Local Open Scope quotient_scope.
 
 Import Key.Exports.
 
-Section ASTDef.
+Context (cons_label : eqType)
+        (bcons_label : eqType)
+        (annot_label : nominalType atom).
 
-Variables (cons_label : Type) (bcons_label : Type) (annot_label : nominalType atom).
+Section ASTDef.
 
 Inductive rAST := 
 |rVar of atom
@@ -150,22 +152,14 @@ Qed.
 
 End ASTDef.
 
-Definition rAST_nominal_mixin (cons_label : Type)
-           (bcons_label : Type) (annot_label : nominalType atom) :=
-  @NominalMixin (rAST_choiceType cons_label bcons_label annot_label) atom 
-                (rAST_nominal_setoid_mixin cons_label bcons_label annot_label) _ 
-                (@rAST_act_id cons_label bcons_label annot_label).
+Definition rAST_nominal_mixin  :=
+  @NominalMixin rAST_choiceType  atom rAST_nominal_setoid_mixin _ 
+                rAST_act_id.
 
-Canonical rAST_nominalType (cons_label : Type) (bcons_label : Type) 
-          (annot_label : nominalType atom) := 
-  @NominalType atom
-    (@rAST_choiceType cons_label bcons_label annot_label) 
-    (@rAST_nominal_mixin cons_label bcons_label annot_label).
+Canonical rAST_nominalType := 
+  @NominalType atom rAST_choiceType rAST_nominal_mixin.
 
 Section rDepth.
-
-Variables (cons_label : Type) (bcons_label : Type) (annot_label : nominalType atom).
-Local Notation rAST := (rAST cons_label bcons_label annot_label).
   
 Lemma rdepth_cons_leq {c} {l} {n} : 
   rAST_depth (rCons c l) <= n.+1 -> 
@@ -198,9 +192,6 @@ End rDepth.
 
 Section AlphaEquivalence.
 
-Variables (cons_label : eqType) (bcons_label : eqType) (annot_label : nominalType atom).
-Local Notation rAST := (rAST cons_label bcons_label annot_label).
-
 Fixpoint alpha_rec (n : nat) (W1 W2 : rAST ) :=
   match n, W1, W2 with
     |_, rVar x, rVar y => x == y
@@ -225,14 +216,14 @@ Lemma alpha_recE n (W1 W2 : rAST) :
 Proof.
 rewrite /alpha; move: {-2}n (leqnn n). 
 elim: n W1 W2 => // [|n ihn] [x|a|c1 l1|c1 x1 l1] [y|b|c2 l2|c2 x2 l2] [|m] //.
-  - rewrite ltnS => m_leq_n /(@rdepth_cons_leq _ _ _ _) /allP IHl1 /=.
+  - rewrite ltnS => m_leq_n /rdepth_cons_leq /allP IHl1 /=.
     apply andb_id2l => _. 
     apply eq_in_all2 => t1 t2 t1l2 t2l2.
     rewrite !ihn //; last exact: IHl1.
       apply/(@leq_trans m) => //. 
       exact/maxlist_map_leqP.
     exact/in_maxlist/map_f.
-  - rewrite ltnS => m_leq_n /(@rdepth_bcons_leq _ _ _ _) /allP IHl1 /=. 
+  - rewrite ltnS => m_leq_n /rdepth_bcons_leq /allP IHl1 /=. 
     apply andb_id2l => _. 
     apply eq_in_all2 => t1 t2 /mapP [?] ? -> /mapP [?] ? ->.
     rewrite !ihn //; try rewrite rdepth_perm; last exact/IHl1;
@@ -246,12 +237,11 @@ Qed.
 (* et depth_bcons_leq au deuxième *)
 
 Lemma alpha_VarE (x y : atom) :
-  alpha (rVar cons_label bcons_label annot_label x) 
-        (rVar cons_label bcons_label annot_label y) = (x == y).
+  alpha (rVar x) (rVar y) = (x == y).
 Proof. by rewrite /alpha. Qed.
 
-Lemma alpha_AnnotE (x y : annot_label) : 
-  alpha (rAnnot cons_label bcons_label x) (rAnnot cons_label bcons_label y) = (x == y).
+Lemma alpha_AnnotE (a b : annot_label) : 
+  alpha (rAnnot a) (rAnnot b) = (a == b).
 Proof. by rewrite /alpha. Qed.
 
 Lemma alpha_ConsE (c1 c2 : cons_label) l1 l2 : 
@@ -391,15 +381,8 @@ End AlphaEquivalence.
 
 Section Quotient.
 
-Variables (cons_label : eqType) (bcons_label : eqType) (annot_label : nominalType atom).
-Local Notation rAST := (@rAST cons_label bcons_label annot_label).
-Local Notation alpha := (@alpha cons_label bcons_label annot_label).
-
 Canonical alpha_equiv := 
-  EquivRel alpha
-           (@alpha_refl cons_label bcons_label annot_label) 
-           (@alpha_sym cons_label bcons_label annot_label) 
-           (@alpha_trans cons_label bcons_label annot_label).
+  EquivRel alpha alpha_refl alpha_sym alpha_trans. 
 
 Definition AST := {eq_quot alpha}.
 Definition AST_eqMixin := [eqMixin of AST].
@@ -423,12 +406,12 @@ rewrite alpha_eqE.
 by split; move/eqP.
 Qed.
 
-Definition Var x := lift_cst AST (rVar cons_label bcons_label annot_label x).
-Lemma rVarK x : \pi_AST (rVar cons_label bcons_label annot_label x) = Var x.
+Definition Var x := lift_cst AST (rVar x).
+Lemma rVarK x : \pi_AST (rVar x) = Var x.
 Proof. by unlock Var. Qed.
 
-Definition Annot x := lift_cst AST (rAnnot cons_label bcons_label x).
-Lemma rAnnotK x : \pi_AST (rAnnot cons_label bcons_label x) = Annot x.
+Definition Annot a := lift_cst AST (rAnnot a).
+Lemma rAnnotK a : \pi_AST (rAnnot a) = Annot a.
 Proof. by unlock Annot. Qed.
 
 Notation lift_map f := 
@@ -458,12 +441,7 @@ End Quotient.
 
 Section NominalAST.
 
-Variables (cons_label : eqType) (bcons_label : eqType) (annot_label : nominalType atom).
-
 Implicit Types (π : {finperm atom}).
-Local Notation rAST := (rAST cons_label bcons_label annot_label).
-Local Notation AST := (AST cons_label bcons_label annot_label).
-Local Notation AST_choiceType := (AST_choiceType cons_label bcons_label annot_label).
 
 Definition AST_act π (t : AST) := \pi_AST (π \dot repr t).
 
@@ -504,17 +482,6 @@ End NominalAST.
 
 Section VariousLemmas.
 
-Variables (cons_label : eqType) (bcons_label : eqType) (annot_label : nominalType atom).
-
-Local Notation rAST := (rAST cons_label bcons_label annot_label).
-Local Notation AST := (AST cons_label bcons_label annot_label).
-Local Notation Var := (@Var cons_label bcons_label annot_label).
-Local Notation Annot := (@Annot cons_label bcons_label annot_label).
-Local Notation Cons := (@Cons cons_label bcons_label annot_label).
-Local Notation BinderCons := (@BinderCons cons_label bcons_label annot_label).
-Local Notation alpha := (@alpha cons_label bcons_label annot_label).
-Local Notation repr := (@repr rAST (AST_quotType cons_label bcons_label annot_label)).
-
 Lemma pi_equivariant π (t : rAST) : 
   π \dot (\pi_AST t) = \pi_AST (π \dot t).
 Proof.
@@ -549,7 +516,7 @@ apply/sym_eq/eq_map => t /=.
 exact/eqP/repr_equivariant.
 Qed.
 
-Lemma fresh_repr x t : x # (repr t) -> x # t.
+Lemma fresh_repr x (t : AST) : x # (repr t) -> x # t.
 Proof.
 move => [S [xNS S_supp_t]].
 exists S; split => //.
@@ -563,10 +530,10 @@ exists S; split => //.
 move => π H. by rewrite pi_equivariant (S_supp_t π).
 Qed.
 
-Lemma fresh_list_repr x l : x # (map repr l) -> x # l.
+Lemma fresh_list_repr x (l : seq AST) : x # (map repr l) -> x # l.
 Proof.
 move => ?.
-apply fresh_list => ? /(map_f repr) ?. 
+apply fresh_list => ? /(map_f (@repr rAST AST_quotType)) ?. 
 apply fresh_repr; by freshTacList.
 Qed.
 
@@ -596,18 +563,16 @@ rewrite ![swap z z' \dot _]act_fresh //.
 all: exact: fresh_list_repr.
 Qed.
 
-Lemma VarK x : repr (Var x) = rVar cons_label bcons_label annot_label x. 
+Lemma VarK x : repr (Var x) = rVar x. 
 Proof.
-have : alpha (repr (Var x)) (rVar cons_label bcons_label annot_label x). 
-(* comment ne pas avoir à spécifier node_lavel ? *)
+have : alpha (repr (Var x)) (rVar x). 
   by rewrite alpha_eqE reprK rVarK. 
 by case: (repr (Var x)) => // ? /eqP ->. 
 Qed.
 
-Lemma AnnotK x : repr (Annot x) = rAnnot cons_label bcons_label x. 
+Lemma AnnotK x : repr (Annot x) = rAnnot x. 
 Proof.
-have : alpha (repr (Annot x)) (rAnnot cons_label bcons_label x). 
-(* comment ne pas avoir à spécifier node_lavel ? *)
+have : alpha (repr (Annot x)) (rAnnot x). 
   by rewrite alpha_eqE reprK rAnnotK. 
 by case: (repr (Annot x)) => // ? /eqP ->. 
 Qed.
@@ -740,7 +705,7 @@ apply all2_refl => t tl; set z := fresh_in _; freshTacCtxt z.
 rewrite alpha_eqE -!pi_equivariant !reprK.
 rewrite act_conj tfinpermL tfinperm_fresh //.
 rewrite [swap y z \dot t]act_fresh //; first by freshTacList.
-move: tl => /(map_f repr) /= ?.
+move: tl => /(map_f (@repr rAST AST_quotType)) /= ?.
 apply fresh_repr; by freshTacList.
 Qed.
 
@@ -755,16 +720,6 @@ Qed.
 End VariousLemmas.
 
 Section Depth.
-
-Variables (cons_label : eqType) (bcons_label : eqType) (annot_label : nominalType atom).
-Local Notation rdepth := (@rAST_depth cons_label bcons_label annot_label).
-Local Notation rAST := (rAST cons_label bcons_label annot_label).
-Local Notation AST := (AST cons_label bcons_label annot_label).
-Local Notation Var := (@Var cons_label bcons_label annot_label).
-Local Notation Annot := (@Annot cons_label bcons_label annot_label).
-Local Notation Cons := (@Cons cons_label bcons_label annot_label).
-Local Notation BinderCons := (@BinderCons cons_label bcons_label annot_label).
-Local Notation alpha := (@alpha cons_label bcons_label annot_label).
 
 Definition depth (t : AST) := rAST_depth (repr t).
 
@@ -818,17 +773,6 @@ End Depth.
 
 Section EliminationPrinciples.
 
-Variables (cons_label : eqType) (bcons_label : eqType) (annot_label : nominalType atom).
-Local Notation rAST := (rAST cons_label bcons_label annot_label).
-Local Notation AST := (AST cons_label bcons_label annot_label).
-Local Notation Var := (@Var cons_label bcons_label annot_label).
-Local Notation Annot := (@Annot cons_label bcons_label annot_label).
-Local Notation Cons := (@Cons cons_label bcons_label annot_label).
-Local Notation BinderCons := (@BinderCons cons_label bcons_label annot_label).
-Local Notation rAST_depth := (@rAST_depth cons_label bcons_label annot_label).
-Local Notation depth := (@depth cons_label bcons_label annot_label).
-
-
 Lemma AST_naive_ind (P : AST -> Prop) :
   (forall x, P (Var x)) ->
   (forall x, P (Annot x)) ->
@@ -865,7 +809,7 @@ elim/AST_naive_ind : u => [x|a|c l IHl|c x l IHl] π.
     exact/IHl.    
   - rewrite BinderCons_equivariant. 
     pose z := fresh_in (C, π x, π \dot l); freshTacCtxt z.
-    rewrite (@eq_BCons _ _ _ _ _ z) -?actM => //.
+    rewrite (@eq_BCons _ _ z) -?actM => //.
     apply HBcons => // t /mapP [reprt ?] ->.
     exact/IHl.
 Qed.
@@ -966,9 +910,9 @@ move => /fresh_rBCons [? /fresh_list_pi ?].
 have [/eqP z_eq_x|/fresh_atomP ?] := boolP (z == x).
   rewrite z_eq_x tfinperm_id act1.
   move: (congr1 \pi_AST repr_cxl); rewrite reprK rBinderConsK.
-  rewrite [X in _ = X](@eq_BCons _ _ _ c y x) -?z_eq_x // => J.  
+  rewrite [X in _ = X](@eq_BCons c y x) -?z_eq_x // => J.  
   exact/BConsx_inj/sym_eq/J.
-apply H => //. apply/(@fresh_BCons _ _ _ _ x c) => //.
+apply H => //. apply/(@fresh_BCons _ x c) => //.
 apply fresh_repr; rewrite repr_cxl. 
 by freshTac.
 Qed.
