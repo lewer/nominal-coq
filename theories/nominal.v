@@ -590,6 +590,17 @@ apply/fdisjointP => a /(fsubsetP (finsupp_conj π' π) a).
 by rewrite in_fsetU => /orP [?|?]; auto.
 Qed.
 
+Lemma disj_im_fresh (π : {finperm atom}) T x : 
+  [disjoint finsupp π & T] -> x # T -> π x # T.
+Proof.
+move => /fdisjointP disj_pi_T xFT.
+have [/eqP ->|pix_neq_x] := boolP (π x == x) => //.
+have : π (π x) != π x.
+  apply/negP => /eqP/finperm_inj.
+  by move: pix_neq_x => /eqP.
+by rewrite -mem_finsupp => /disj_pi_T /fresh_fsetP.
+Qed.
+  
 End Freshness.
 
 Notation "a # x" := (fresh a x) (x at level 60, at level 60).

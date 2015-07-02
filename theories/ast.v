@@ -18,10 +18,11 @@ Import Key.Exports.
 
 Section ASTDef.
 
-Variables (cons_label : Type) (bcons_label : Type) (leaf_label : nominalType atom).
+Variables (cons_label : Type) (bcons_label : Type) (annot_label : nominalType atom).
 
 Inductive rAST := 
-|rLeaf of leaf_label
+|rVar of atom
+|rAnnot of annot_label
 |rCons of cons_label & seq rAST
 |rBinderCons of bcons_label & atom & seq rAST.
 
@@ -47,36 +48,38 @@ rewrite inE => /orP. case; first by move /eqP ->.
 by apply IHl.
 Qed.
 
-Definition rAST_better_ind P IH_leaf IH_cons IH_bcons :=
+Definition rAST_better_ind P IH_var IH_annot IH_cons IH_bcons :=
   fix loop t : P t : Prop := 
   let fix iter_conj f : foldr (fun t => and (P t)) True f :=
       if f is t :: f' then conj (loop t) (iter_conj f') else Logic.I
   in
   match t with
-  | rLeaf x => IH_leaf x
-  | rCons c f0 => IH_cons c f0 (rAST_better_ind_subproof (iter_conj f0))
-  | rBinderCons c x f0 => IH_bcons c x f0 (rAST_better_ind_subproof (iter_conj f0))
+    | rVar x => IH_var x
+    | rAnnot x => IH_annot x
+    | rCons c f0 => IH_cons c f0 (rAST_better_ind_subproof (iter_conj f0))
+    | rBinderCons c x f0 => IH_bcons c x f0 (rAST_better_ind_subproof (iter_conj f0))
     end.
-
-Variable (s : seq nat).
 
 Fixpoint rAST_depth (t : rAST) : nat :=
   match t with
-    |rLeaf _ => 0
+    |rVar _ => 0
+    |rAnnot _ => 0
     |rCons _ l => (maxlist (map rAST_depth l)).+1
     |rBinderCons _ _ l => (maxlist (map rAST_depth l)).+1
   end.
 
 Fixpoint rAST_act (π : {finperm atom}) (t : rAST) :=
   match t with
-    |rLeaf u => rLeaf (π \dot u)
+    |rVar x => rVar (π x)
+    |rAnnot u => rAnnot (π \dot u)
     |rCons c l => rCons c [seq (rAST_act π u) | u <- l]
     |rBinderCons c x l => rBinderCons c (π x) [seq (rAST_act π u) | u <- l]
   end.
 
 Lemma rAST_act1 : rAST_act (1 atom) =1 id.
 Proof. 
-elim/rAST_better_ind => [x|c l IHl|c x l IHl] /=.
+elim/rAST_better_ind => [x|a|c l IHl|c x l IHl] /=.
+  - by rewrite finsfun1.
   - by rewrite act1.
   - by rewrite map_id_in //.
   - by rewrite finsfun1 map_id_in.
@@ -85,7 +88,8 @@ Qed.
 Lemma rAST_actM π π' (t : rAST) : 
   rAST_act (π * π') t = rAST_act π (rAST_act π' t).
 Proof.
-elim/rAST_better_ind :t => [x|c l IHl|c x l IHl] /=.
+elim/rAST_better_ind :t => [x|a|c l IHl|c x l IHl] /=.
+  - by rewrite finsfunM.
   - by rewrite actM.
   - congr rCons. rewrite -map_comp. 
     apply eq_in_map => t /=. exact: IHl.
@@ -104,7 +108,8 @@ Definition rAST_nominal_setoid_mixin :=
 
 Fixpoint rAST_support t :=
   match t with
-    |rLeaf x => support x
+    |rVar x => [fset x]
+    |rAnnot x => support x
     |rCons _ l => fsetU_list (map rAST_support l)
     |rBinderCons _ x l => x |` (fsetU_list (map rAST_support l))
   end.
@@ -130,7 +135,8 @@ Qed.
 Lemma rAST_act_id (π : {finperm atom}) (t : rAST) :
      (forall a : atom, a \in rAST_support t -> π a = a) -> rAST_act π t = t.
 Proof.
-elim/rAST_better_ind : t => [x|c l IHl|c x l IHl] Hsupp /=.
+elim/rAST_better_ind : t => [x|a|c l IHl|c x l IHl] Hsupp /=.
+  - by rewrite -atomactE act_id.                        
   - by rewrite act_id.
   - rewrite map_id_in // => t t_in_l.
     apply IHl => // a a_supp_t.
@@ -145,21 +151,21 @@ Qed.
 End ASTDef.
 
 Definition rAST_nominal_mixin (cons_label : Type)
-           (bcons_label : Type) (leaf_label : nominalType atom) :=
-  @NominalMixin (rAST_choiceType cons_label bcons_label leaf_label) atom 
-                (rAST_nominal_setoid_mixin cons_label bcons_label leaf_label) _ 
-                (@rAST_act_id cons_label bcons_label leaf_label).
+           (bcons_label : Type) (annot_label : nominalType atom) :=
+  @NominalMixin (rAST_choiceType cons_label bcons_label annot_label) atom 
+                (rAST_nominal_setoid_mixin cons_label bcons_label annot_label) _ 
+                (@rAST_act_id cons_label bcons_label annot_label).
 
 Canonical rAST_nominalType (cons_label : Type) (bcons_label : Type) 
-          (leaf_label : nominalType atom) := 
+          (annot_label : nominalType atom) := 
   @NominalType atom
-    (@rAST_choiceType cons_label bcons_label leaf_label) 
-    (@rAST_nominal_mixin cons_label bcons_label leaf_label).
+    (@rAST_choiceType cons_label bcons_label annot_label) 
+    (@rAST_nominal_mixin cons_label bcons_label annot_label).
 
 Section rDepth.
 
-Variables (cons_label : Type) (bcons_label : Type) (leaf_label : nominalType atom).
-Local Notation rAST := (rAST cons_label bcons_label leaf_label).
+Variables (cons_label : Type) (bcons_label : Type) (annot_label : nominalType atom).
+Local Notation rAST := (rAST cons_label bcons_label annot_label).
   
 Lemma rdepth_cons_leq {c} {l} {n} : 
   rAST_depth (rCons c l) <= n.+1 -> 
@@ -182,7 +188,7 @@ Qed.
 Lemma rdepth_perm (π : {finperm atom}) (t : rAST) : 
 rAST_depth (π \dot t) = rAST_depth t.
 Proof. 
-elim/rAST_better_ind: t => [x|? l ihl|? ? l ihl] //=. 
+elim/rAST_better_ind: t => [x|a|? l ihl|? ? l ihl] //=. 
 all: apply eq_S; congr maxlist; rewrite -map_comp.
 all: apply eq_in_map => t tl /=.
 all: exact: ihl.
@@ -190,31 +196,15 @@ Qed.
 
 End rDepth.
 
-Section WellFormedness.
-
-Variables (cons_label : Type) (bcons_label : Type) (leaf_label : nominalType atom)
-          (cons_arity : cons_label -> nat) (bcons_arity : bcons_label -> nat).
-Local Notation rAST := (rAST cons_label bcons_label leaf_label).
-
-Fixpoint wf (t : rAST) : bool :=
-  match t with
-    |rLeaf _ => true
-    |rCons c l => (size l == cons_arity c) && (all wf l)
-    |rBinderCons c _ l => (size l == bcons_arity c) && (all wf l)
-  end.
-
-Definition wf_rAST := sig_subType wf.
-
-End WellFormedness.
-
 Section AlphaEquivalence.
 
-Variables (cons_label : eqType) (bcons_label : eqType) (leaf_label : nominalType atom).
-Local Notation rAST := (rAST cons_label bcons_label leaf_label).
+Variables (cons_label : eqType) (bcons_label : eqType) (annot_label : nominalType atom).
+Local Notation rAST := (rAST cons_label bcons_label annot_label).
 
 Fixpoint alpha_rec (n : nat) (W1 W2 : rAST ) :=
   match n, W1, W2 with
-    |_, rLeaf x, rLeaf y => x == y
+    |_, rVar x, rVar y => x == y
+    |_, rAnnot a, rAnnot b => a == b
     |S n, rCons c1 children1, rCons c2 children2 => 
      (c1 == c2) && 
      (all2 (alpha_rec n) children1 children2)
@@ -234,7 +224,7 @@ Lemma alpha_recE n (W1 W2 : rAST) :
   alpha_rec n W1 W2 = alpha W1 W2.
 Proof.
 rewrite /alpha; move: {-2}n (leqnn n). 
-elim: n W1 W2 => // [|n ihn] [x|c1 l1|c1 x1 l1] [y|c2 l2|c2 x2 l2] [|m] //.
+elim: n W1 W2 => // [|n ihn] [x|a|c1 l1|c1 x1 l1] [y|b|c2 l2|c2 x2 l2] [|m] //.
   - rewrite ltnS => m_leq_n /(@rdepth_cons_leq _ _ _ _) /allP IHl1 /=.
     apply andb_id2l => _. 
     apply eq_in_all2 => t1 t2 t1l2 t2l2.
@@ -255,8 +245,13 @@ Qed.
 (* identiques ? Il faudrait pouvoir appliquer depth_cons_leq au premier sous but *)
 (* et depth_bcons_leq au deuxième *)
 
-Lemma alpha_LeafE (x y : leaf_label) : 
-  alpha (rLeaf cons_label bcons_label x) (rLeaf cons_label bcons_label y) = (x == y).
+Lemma alpha_VarE (x y : atom) :
+  alpha (rVar cons_label bcons_label annot_label x) 
+        (rVar cons_label bcons_label annot_label y) = (x == y).
+Proof. by rewrite /alpha. Qed.
+
+Lemma alpha_AnnotE (x y : annot_label) : 
+  alpha (rAnnot cons_label bcons_label x) (rAnnot cons_label bcons_label y) = (x == y).
 Proof. by rewrite /alpha. Qed.
 
 Lemma alpha_ConsE (c1 c2 : cons_label) l1 l2 : 
@@ -281,17 +276,15 @@ rewrite alpha_recE // rdepth_perm.
 exact/in_maxlist/map_f.
 Qed.
 
-Definition alphaE := (alpha_LeafE, alpha_ConsE, alpha_BinderConsE).
+Definition alphaE := (alpha_VarE, alpha_AnnotE, alpha_ConsE, alpha_BinderConsE).
 
 Lemma alpha_equivariant (W1 W2 : rAST ) (π : {finperm atom}):
   alpha (π \dot W1) (π \dot W2) = alpha W1 W2.
 Proof.
 rewrite/alpha rdepth_perm.
 move: {-1}(rAST_depth W1) (leqnn (rAST_depth W1)) => n.
-elim: n W1 W2 π => [|n IHn] [x1|c1 l1|c1 x1 l1] [x2|c2 l2|c2 x2 l2] π //=.
-  rewrite inj_eq //. exact: act_inj.
-  rewrite inj_eq //. exact: act_inj.
-  (* comment appliquer aux deux sous-buts sans recopier ? *)
+elim: n W1 W2 π => [|n IHn] [x1|a1|c1 l1|c1 x1 l1] [x2|a2|c2 l2|c2 x2 l2] π //=;
+  try solve [rewrite inj_eq //; exact: act_inj].
 all: rewrite ltnS => /maxlist_map_leqP IHl1.
 all: apply andb_id2l => _. 
 all: rewrite !all2_map; apply eq_in_all2 => t1 t2 ? ?.
@@ -342,7 +335,7 @@ Qed.
 
 Lemma alpha_refl : reflexive alpha.
 Proof.
-elim/rAST_better_ind => [s|c l|c x l]; rewrite alphaE eqxx //= => Hrefl.
+elim/rAST_better_ind => [x|a|c l|c x l]; rewrite alphaE eqxx //= => Hrefl.
 all: apply all2_refl => t.
   exact/Hrefl.
 move/mapP => [?] ? ->. 
@@ -353,7 +346,7 @@ Lemma alpha_sym : symmetric alpha.
 Proof.
 move => t1 t2; rewrite/alpha.
 move: {-1}(rAST_depth t1) (leqnn (rAST_depth t1)) => n.
-elim: n t1 t2 => [|n IHn] [x1|c1 l1|c1 x1 l1] [x2|c2 l2|c2 x2 l2] //=;
+elim: n t1 t2 => [|n IHn] [x1|a1|c1 l1|c1 x1 l1] [x2|a2|c2 l2|c2 x2 l2] //=;
 rewrite eq_sym.
 all: rewrite ltnS => /maxlist_map_leqP depth_l1_leqn.
 all: apply andb_id2l => _.
@@ -374,9 +367,9 @@ Qed.
 Lemma alpha_trans : transitive alpha.
 move => t2 t1 t3.
 move: {-1}(rAST_depth t1) (leqnn (rAST_depth t1)) => n.
-elim: n t1 t2 t3 => [|n IHn] [x1|c1 l1|c1 x1 l1] 
-                             [x2|c2 l2|c2 x2 l2] 
-                             [x3|c3 l3|c3 x3 l3] //=; 
+elim: n t1 t2 t3 => [|n IHn] [x1|a1|c1 l1|c1 x1 l1] 
+                             [x2|a2|c2 l2|c2 x2 l2] 
+                             [x3|a3|c3 l3|c3 x3 l3] //=; 
 try solve [move => _; apply eq_op_trans].
 all: rewrite ltnS => /maxlist_map_leqP deptht1_leqn.
   rewrite !alphaE => /andP [c1_eq_c2 Hl1l2] /andP [c2_eq_c3 Hl2l3].
@@ -398,15 +391,15 @@ End AlphaEquivalence.
 
 Section Quotient.
 
-Variables (cons_label : eqType) (bcons_label : eqType) (leaf_label : nominalType atom).
-Local Notation rAST := (@rAST cons_label bcons_label leaf_label).
-Local Notation alpha := (@alpha cons_label bcons_label leaf_label).
+Variables (cons_label : eqType) (bcons_label : eqType) (annot_label : nominalType atom).
+Local Notation rAST := (@rAST cons_label bcons_label annot_label).
+Local Notation alpha := (@alpha cons_label bcons_label annot_label).
 
 Canonical alpha_equiv := 
   EquivRel alpha
-           (@alpha_refl cons_label bcons_label leaf_label) 
-           (@alpha_sym cons_label bcons_label leaf_label) 
-           (@alpha_trans cons_label bcons_label leaf_label).
+           (@alpha_refl cons_label bcons_label annot_label) 
+           (@alpha_sym cons_label bcons_label annot_label) 
+           (@alpha_trans cons_label bcons_label annot_label).
 
 Definition AST := {eq_quot alpha}.
 Definition AST_eqMixin := [eqMixin of AST].
@@ -430,9 +423,13 @@ rewrite alpha_eqE.
 by split; move/eqP.
 Qed.
 
-Definition Leaf x := lift_cst AST (rLeaf cons_label bcons_label x).
-Lemma rLeafK x : \pi_AST (rLeaf cons_label bcons_label x) = Leaf x.
-Proof. by unlock Leaf. Qed.
+Definition Var x := lift_cst AST (rVar cons_label bcons_label annot_label x).
+Lemma rVarK x : \pi_AST (rVar cons_label bcons_label annot_label x) = Var x.
+Proof. by unlock Var. Qed.
+
+Definition Annot x := lift_cst AST (rAnnot cons_label bcons_label x).
+Lemma rAnnotK x : \pi_AST (rAnnot cons_label bcons_label x) = Annot x.
+Proof. by unlock Annot. Qed.
 
 Notation lift_map f := 
   (locked (fun l : seq AST => \pi_AST (f (map (@repr _ AST_quotType) l)))).
@@ -461,12 +458,12 @@ End Quotient.
 
 Section NominalAST.
 
-Variables (cons_label : eqType) (bcons_label : eqType) (leaf_label : nominalType atom).
+Variables (cons_label : eqType) (bcons_label : eqType) (annot_label : nominalType atom).
 
 Implicit Types (π : {finperm atom}).
-Local Notation rAST := (rAST cons_label bcons_label leaf_label).
-Local Notation AST := (AST cons_label bcons_label leaf_label).
-Local Notation AST_choiceType := (AST_choiceType cons_label bcons_label leaf_label).
+Local Notation rAST := (rAST cons_label bcons_label annot_label).
+Local Notation AST := (AST cons_label bcons_label annot_label).
+Local Notation AST_choiceType := (AST_choiceType cons_label bcons_label annot_label).
 
 Definition AST_act π (t : AST) := \pi_AST (π \dot repr t).
 
@@ -507,15 +504,16 @@ End NominalAST.
 
 Section VariousLemmas.
 
-Variables (cons_label : eqType) (bcons_label : eqType) (leaf_label : nominalType atom).
+Variables (cons_label : eqType) (bcons_label : eqType) (annot_label : nominalType atom).
 
-Local Notation rAST := (rAST cons_label bcons_label leaf_label).
-Local Notation AST := (AST cons_label bcons_label leaf_label).
-Local Notation Leaf := (@Leaf cons_label bcons_label leaf_label).
-Local Notation Cons := (@Cons cons_label bcons_label leaf_label).
-Local Notation BinderCons := (@BinderCons cons_label bcons_label leaf_label).
-Local Notation alpha := (@alpha cons_label bcons_label leaf_label).
-Local Notation repr := (@repr rAST (AST_quotType cons_label bcons_label leaf_label)).
+Local Notation rAST := (rAST cons_label bcons_label annot_label).
+Local Notation AST := (AST cons_label bcons_label annot_label).
+Local Notation Var := (@Var cons_label bcons_label annot_label).
+Local Notation Annot := (@Annot cons_label bcons_label annot_label).
+Local Notation Cons := (@Cons cons_label bcons_label annot_label).
+Local Notation BinderCons := (@BinderCons cons_label bcons_label annot_label).
+Local Notation alpha := (@alpha cons_label bcons_label annot_label).
+Local Notation repr := (@repr rAST (AST_quotType cons_label bcons_label annot_label)).
 
 Lemma pi_equivariant π (t : rAST) : 
   π \dot (\pi_AST t) = \pi_AST (π \dot t).
@@ -527,8 +525,11 @@ Qed.
 Lemma repr_equivariant π (t : AST) : repr (π \dot t) == π \dot (repr t) %[mod AST]. 
 Proof. by rewrite -pi_equivariant !reprK. Qed.
 
-Lemma Leaf_equivariant π x : π \dot (Leaf x) = Leaf (π \dot x).
-Proof. by rewrite -rLeafK pi_equivariant /= rLeafK. Qed.
+Lemma Var_equivariant π x : π \dot (Var x) = Var (π x).
+Proof. by rewrite -rVarK pi_equivariant /= rVarK. Qed.
+
+Lemma Annot_equivariant π x : π \dot (Annot x) = Annot (π \dot x).
+Proof. by rewrite -rAnnotK pi_equivariant /= rAnnotK. Qed.
 
 Lemma Cons_equivariant π c l : 
   π \dot (Cons c l) = Cons c (π \dot l).
@@ -595,12 +596,20 @@ rewrite ![swap z z' \dot _]act_fresh //.
 all: exact: fresh_list_repr.
 Qed.
 
-Lemma LeafK x : repr (Leaf x) = rLeaf cons_label bcons_label x. 
+Lemma VarK x : repr (Var x) = rVar cons_label bcons_label annot_label x. 
 Proof.
-have : alpha (repr (Leaf x)) (rLeaf cons_label bcons_label x). 
+have : alpha (repr (Var x)) (rVar cons_label bcons_label annot_label x). 
 (* comment ne pas avoir à spécifier node_lavel ? *)
-  by rewrite alpha_eqE reprK rLeafK. 
-by case: (repr (Leaf x)) => // ? /eqP ->. 
+  by rewrite alpha_eqE reprK rVarK. 
+by case: (repr (Var x)) => // ? /eqP ->. 
+Qed.
+
+Lemma AnnotK x : repr (Annot x) = rAnnot cons_label bcons_label x. 
+Proof.
+have : alpha (repr (Annot x)) (rAnnot cons_label bcons_label x). 
+(* comment ne pas avoir à spécifier node_lavel ? *)
+  by rewrite alpha_eqE reprK rAnnotK. 
+by case: (repr (Annot x)) => // ? /eqP ->. 
 Qed.
 
 Lemma ConsK c l : exists repr_l,
@@ -628,20 +637,26 @@ by exists x2; exists l2.
 Qed.
 
 Lemma AST_caseP (t : AST) :
-  (exists x, t = Leaf x) \/
+  (exists x, t = Var x) \/
+  (exists x, t = Annot x) \/
   (exists c l, t = Cons c l) \/
   (exists c x l, t = BinderCons c x l).
 Proof.
-case_eq (repr t) => [x|c l|c x l] /(congr1 \pi_AST).
-all: rewrite reprK (rLeafK, rConsK, rBinderConsK) => ?.
-  - left. by exists x.
-  - right; left. by exists c; exists (map \pi l).
-  - right; right. by exists c; exists x; exists (map \pi l).
+case_eq (repr t) => [x|a|c l|c x l] /(congr1 \pi_AST).
+all: rewrite reprK (rVarK, rAnnotK, rConsK, rBinderConsK) => ?.
+  - left. by exists x.                                                            
+  - right; left. by exists a.
+  - right; right; left. by exists c; exists (map \pi l).
+  - right; right; right. by exists c; exists x; exists (map \pi l).
 Qed.
 
-Lemma Leaf_inj : injective Leaf.
+Lemma Var_inj : injective Var.
 Proof. 
-move => x y /(congr1 repr). rewrite !LeafK => H. by injection H. Qed.
+move => x y /(congr1 repr). rewrite !VarK => H. by injection H. Qed.
+
+Lemma Annot_inj : injective Annot.
+Proof. 
+move => x y /(congr1 repr). rewrite !AnnotK => H. by injection H. Qed.
 
 Lemma Cons_inj c1 c2 l1 l2 : 
   Cons c1 l1 = Cons c2 l2 -> c1 = c2 /\ l1 = l2.
@@ -663,14 +678,24 @@ freshTacCtxt z.
 exact/H.
 Qed. 
 
-Lemma fresh_Leaf x y : x # (Leaf y) <-> x # y.
+Lemma fresh_Var x y : x # (Var y) <-> x # y.
 Proof.
 split => [[S] [xNS S_supp_Ly]|xFy].
   exists S; split => // π HS.
-  apply Leaf_inj. rewrite -Leaf_equivariant.
+  apply Var_inj. rewrite -Var_equivariant.
   exact: S_supp_Ly.   
-apply (@CFN_principle (fresh_in (y, Leaf y))); first by freshTac.
-rewrite Leaf_equivariant act_fresh //; by freshTac.
+apply (@CFN_principle (fresh_in (y, Var y))); first by freshTac.
+rewrite Var_equivariant tfinperm_fresh //; by freshTac.
+Qed.
+
+Lemma fresh_Annot x y : x # (Annot y) <-> x # y.
+Proof.
+split => [[S] [xNS S_supp_Ly]|xFy].
+  exists S; split => // π HS.
+  apply Annot_inj. rewrite -Annot_equivariant.
+  exact: S_supp_Ly.   
+apply (@CFN_principle (fresh_in (y, Annot y))); first by freshTac.
+rewrite Annot_equivariant act_fresh //; by freshTac.
 Qed.
 
 Lemma fresh_Cons x c l : x # (Cons c l) -> x # l.
@@ -731,20 +756,21 @@ End VariousLemmas.
 
 Section Depth.
 
-Variables (cons_label : eqType) (bcons_label : eqType) (leaf_label : nominalType atom).
-Local Notation rdepth := (@rAST_depth cons_label bcons_label leaf_label).
-Local Notation rAST := (rAST cons_label bcons_label leaf_label).
-Local Notation AST := (AST cons_label bcons_label leaf_label).
-Local Notation Leaf := (@Leaf cons_label bcons_label leaf_label).
-Local Notation Cons := (@Cons cons_label bcons_label leaf_label).
-Local Notation BinderCons := (@BinderCons cons_label bcons_label leaf_label).
-Local Notation alpha := (@alpha cons_label bcons_label leaf_label).
+Variables (cons_label : eqType) (bcons_label : eqType) (annot_label : nominalType atom).
+Local Notation rdepth := (@rAST_depth cons_label bcons_label annot_label).
+Local Notation rAST := (rAST cons_label bcons_label annot_label).
+Local Notation AST := (AST cons_label bcons_label annot_label).
+Local Notation Var := (@Var cons_label bcons_label annot_label).
+Local Notation Annot := (@Annot cons_label bcons_label annot_label).
+Local Notation Cons := (@Cons cons_label bcons_label annot_label).
+Local Notation BinderCons := (@BinderCons cons_label bcons_label annot_label).
+Local Notation alpha := (@alpha cons_label bcons_label annot_label).
 
 Definition depth (t : AST) := rAST_depth (repr t).
 
 Lemma rdepth_alpha t u : alpha t u -> rAST_depth t = rAST_depth u. 
 Proof.
-elim/rAST_better_ind: t u => [x1|c1 l1 IHl1|c1 x1 l1 IHl1] [x2|c2 l2|c2 x2 l2] //=.
+elim/rAST_better_ind: t u => [x1|a1|c1 l1 IHl1|c1 x1 l1 IHl1] [x2|a2|c2 l2|c2 x2 l2] //=.
 all: rewrite alphaE => /andP /= [_ l1_alpha_l2].
 all: apply eq_S; congr maxlist.
   apply (@all2_quot _ _ _ _ alpha) => // x y xl1 yl2. 
@@ -768,8 +794,11 @@ apply rdepth_alpha. rewrite alpha_eqE.
 exact: repr_equivariant.
 Qed.
 
-Lemma depth_Leaf x : depth (Leaf x) = 0.
-Proof. by rewrite/depth LeafK. Qed.
+Lemma depth_Var x : depth (Var x) = 0.
+Proof. by rewrite/depth VarK. Qed.
+
+Lemma depth_Annot x : depth (Annot x) = 0.
+Proof. by rewrite/depth AnnotK. Qed.
 
 Lemma depth_Cons c l : depth (Cons c l) = (maxlist (map depth l)).+1.
 Proof.
@@ -789,26 +818,29 @@ End Depth.
 
 Section EliminationPrinciples.
 
-Variables (cons_label : eqType) (bcons_label : eqType) (leaf_label : nominalType atom).
-Local Notation rAST := (rAST cons_label bcons_label leaf_label).
-Local Notation AST := (AST cons_label bcons_label leaf_label).
-Local Notation Leaf := (@Leaf cons_label bcons_label leaf_label).
-Local Notation Cons := (@Cons cons_label bcons_label leaf_label).
-Local Notation BinderCons := (@BinderCons cons_label bcons_label leaf_label).
-Local Notation rAST_depth := (@rAST_depth cons_label bcons_label leaf_label).
-Local Notation depth := (@depth cons_label bcons_label leaf_label).
+Variables (cons_label : eqType) (bcons_label : eqType) (annot_label : nominalType atom).
+Local Notation rAST := (rAST cons_label bcons_label annot_label).
+Local Notation AST := (AST cons_label bcons_label annot_label).
+Local Notation Var := (@Var cons_label bcons_label annot_label).
+Local Notation Annot := (@Annot cons_label bcons_label annot_label).
+Local Notation Cons := (@Cons cons_label bcons_label annot_label).
+Local Notation BinderCons := (@BinderCons cons_label bcons_label annot_label).
+Local Notation rAST_depth := (@rAST_depth cons_label bcons_label annot_label).
+Local Notation depth := (@depth cons_label bcons_label annot_label).
 
 
 Lemma AST_naive_ind (P : AST -> Prop) :
-  (forall x, P (Leaf x)) ->
+  (forall x, P (Var x)) ->
+  (forall x, P (Annot x)) ->
   (forall c l, (forall t, t \in l -> P t) -> P (Cons c l)) ->
   (forall c x l, (forall t, t \in l -> P t) -> P (BinderCons c x l)) ->
   forall u, P u.
 (* {in l, P} ? *)
 Proof. 
-move => HLeaf HCons HBCons u; rewrite -[u]reprK.
-elim/rAST_better_ind : (repr u) => [x|c l IHl|c x l IHl] /=.
-  - by rewrite rLeafK.
+move => HVar HAnnot HCons HBCons u; rewrite -[u]reprK.
+elim/rAST_better_ind : (repr u) => [x|a|c l IHl|c x l IHl] /=.
+  - by rewrite rVarK.              
+  - by rewrite rAnnotK.
   - rewrite rConsK. apply HCons => t /mapP [reprt ?] ->.
     exact/IHl.
   - rewrite rBinderConsK. apply HBCons => t /mapP [reprt ?] ->.
@@ -816,17 +848,19 @@ elim/rAST_better_ind : (repr u) => [x|c l IHl|c x l IHl] /=.
 Qed.
 
 Lemma AST_ind {env : nominalType atom} (C : env) (P : AST -> Prop) :
-  (forall x, P (Leaf x)) ->
+  (forall x, P (Var x)) ->
+  (forall x, P (Annot x)) ->
   (forall c l, (forall t, t \in l -> P t) -> P (Cons c l)) ->
   (forall c x l, x # C -> (forall t, t \in l -> P t) -> P (BinderCons c x l)) ->
   forall u, P u.
 (* {in l, P} ? *)
 Proof. 
-move => HLeaf HCons HBcons u.
+move => HVar HAnnot HCons HBcons u.
 suff : forall π, P (π \dot u).
   by move => /(_ (1 atom)); rewrite act1.
-elim/AST_naive_ind : u => [x|c l IHl|c x l IHl] π.
-  - by rewrite Leaf_equivariant.
+elim/AST_naive_ind : u => [x|a|c l IHl|c x l IHl] π.
+  - by rewrite Var_equivariant.
+  - by rewrite Annot_equivariant.
   - rewrite Cons_equivariant. apply HCons => t /mapP [reprt ?] ->. 
     exact/IHl.    
   - rewrite BinderCons_equivariant. 
@@ -837,15 +871,20 @@ elim/AST_naive_ind : u => [x|c l IHl|c x l IHl] π.
 Qed.
 
 Variables (X : nominalType atom)
-          (f_leaf : leaf_label -> X)
+          (f_var : atom -> X)
+          (f_annot : annot_label -> X)
           (f_cons : cons_label -> seq AST -> seq X -> X)
           (f_bcons : bcons_label -> atom -> seq AST -> seq X -> X)
           (Supp : {fset atom})
           (dflt : X).
 
-Hypothesis f_leaf_equivariant : 
+Hypothesis f_var_equivariant : 
   forall (π : {finperm atom}) x, 
-    [disjoint finsupp π & Supp] -> π \dot f_leaf x = f_leaf (π \dot x).
+    [disjoint finsupp π & Supp] -> π \dot f_var x = f_var (π \dot x).
+
+Hypothesis f_annot_equivariant : 
+  forall (π : {finperm atom}) x, 
+    [disjoint finsupp π & Supp] -> π \dot f_annot x = f_annot (π \dot x).
 
 Hypothesis f_cons_equivariant :
   forall (π : {finperm atom}) c l l',
@@ -864,7 +903,8 @@ Hypothesis FCB_fbcons :
 
 Fixpoint AST_rect_rec (n : nat) (t : AST):=
   match n, (repr t) with
-    |_, rLeaf x => f_leaf x
+    |_, rVar x => f_var x
+    |_, rAnnot x => f_annot x
     |S n, rCons c l => f_cons c (map \pi l) (map (AST_rect_rec n) (map \pi l))
     |S n, rBinderCons c x l =>
      let z := fresh_in (Supp, rBinderCons c x l) in
@@ -883,8 +923,7 @@ elim: n t => [|n IHn] t //; rewrite /depth.
   by move => ?; do 2?(rewrite leqn0 => /eqP ->).
 move => [?|m]; first by rewrite leqn0 => /eqP ->.
 rewrite ltnS => m_leq_n.
-case_eq (repr t) => [x|c l|x c l] //= ->;
-  first by move => ?.
+case_eq (repr t) => [x|a|c l|x c l] /= -> //.
 all: rewrite ltnS => IHl; try (congr f_cons); try (congr f_bcons).
 all: rewrite 2?listactE -!map_comp; apply eq_in_map => u ul /=.
 all: rewrite !IHn //; first exact/(@leq_trans m);
@@ -892,8 +931,11 @@ all: rewrite !IHn //; first exact/(@leq_trans m);
 all: by eapply leq_trans; first apply/in_maxlist/map_f/ul.
 Qed.
 
-Lemma AST_rect_LeafE x : AST_rect (Leaf x) = f_leaf x.
-Proof. by rewrite /AST_rect depth_Leaf /= LeafK. Qed.
+Lemma AST_rect_VarE x : AST_rect (Var x) = f_var x.
+Proof. by rewrite /AST_rect depth_Var /= VarK. Qed.
+
+Lemma AST_rect_AnnotE x : AST_rect (Annot x) = f_annot x.
+Proof. by rewrite /AST_rect depth_Annot /= AnnotK. Qed.
 
 Lemma AST_rect_ConsE c l : 
   AST_rect (Cons c l) = f_cons c l (map AST_rect l).
@@ -968,21 +1010,21 @@ Qed.
 Lemma AST_rect_equivariant t :
  equiv t.
 Proof.
-elim/(@AST_ind _ Supp): t => [v|c l IHl|c z l zFSupp IHl] π disj_pi_S.
-  - by rewrite !Leaf_equivariant !AST_rect_LeafE f_leaf_equivariant //.
+elim/(@AST_ind _ Supp): t => [v|a|c l IHl|c z l zFSupp IHl] π disj_pi_S.
+  - by rewrite Var_equivariant !AST_rect_VarE f_var_equivariant.
+  - by rewrite !Annot_equivariant !AST_rect_AnnotE f_annot_equivariant.
   - rewrite !Cons_equivariant !AST_rect_ConsE f_cons_equivariant //. 
     rewrite [X in f_cons _ _ X]map_equivariant //; last by
       move => t tl; exact/IHl.
   - have Hres1 := (@equiv_res_subproof c _ _ IHl zFSupp).
     have Hres2 : res c (π z) (π \dot l).
-      apply/equiv_res_subproof => //. 
+      apply/equiv_res_subproof => //; last exact/disj_im_fresh. 
       move => t /mapP [?] ? -> π' ?.
       rewrite -actM -!IHl // ?actM //; exact/disjoint_conj.
-      admit.
     rewrite BinderCons_equivariant Hres1 Hres2. 
-    rewrite f_bcons_equivariant // map_equivariant //.
-    move => ? ?; exact/IHl.
-Admitted.
+    rewrite f_bcons_equivariant // map_equivariant // => ? ?.
+    exact/IHl.
+Qed.
 
 Lemma AST_rect_BinderConsE c x l : 
   x # Supp -> 
@@ -992,3 +1034,6 @@ move => xFsupp.
 apply/equiv_res_subproof => // ? ?. 
 exact/AST_rect_equivariant.
 Qed.
+
+End EliminationPrinciples.
+
