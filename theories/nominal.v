@@ -325,44 +325,65 @@ End NominalAtomSubsets.
 
 Section Nominalffun.
 
+(* ATtention, il ne s'agit pas des ffun de ssreflect, mais des
+fonctions d'un type fini dans un nominalType *)
+
 Context (X : nominalType atom) (I : finType).
 
-Definition ffunact π (f : {ffun I -> X}) := [ffun i => π \dot f i].
+Definition ffunact π (f : I -> X) i := π \dot f i.
 
 Lemma ffunact1 : ffunact (1 atom) =1 id.
 Proof.
 move => f /=.
-apply/ffunP => i.
-by rewrite ffunE act1.
+apply/funext => i. 
+by rewrite /ffunact act1.
 Qed.
 
 Lemma ffunactM : forall π π' f, ffunact (π * π') f = ffunact π (ffunact π' f).
 Proof.
 move => π π' f /=. 
-apply/ffunP => i.
-by rewrite !ffunE actM.
+apply/funext => i.
+by rewrite /ffunact actM.
 Qed.
 
-Lemma ffunactproper (f g : {ffun I -> X}) π : f = g -> (ffunact π f) = (ffunact π g).
-Proof. by move => ->. Qed.
+Lemma ffunactproper : forall f g π, f = g -> (ffunact π f) = (ffunact π g).
+Proof. by move => f g π ->. Qed.
 
-Lemma ffunact_id (π : {finperm atom}) (f : {ffun I -> X}) :
+Lemma ffunact_id (π : {finperm atom}) f :
   (forall b, b \in (\fbigcup_(i in I) (support (f i))) -> π b = b) -> ffunact π f = f.
 Proof.
 move => fsupp /=.
-apply/ffunP => i.
-rewrite ffunE. apply/act_id => a a_supp_fi.
+apply/funext => i.
+rewrite /ffunact. apply/act_id => a a_supp_fi.
 apply/fsupp/fbigcupP. by exists i.
 Qed.
 
+Definition code_ffun : (I -> X) -> GenTree.tree nat. Admitted.
+Definition decode_ffun : GenTree.tree nat -> (I -> X). Admitted.
+
+Lemma ffun_codeK : cancel code_ffun decode_ffun.
+Proof.
+Admitted.
+
+(* rewrite/code_ffun/decode_ffun => f. *)
+(* apply/funext => i.  *)
+(* exact/ffunE. *)
+(* Qed. *)
+
+Definition ffun_EqMixin := CanEqMixin ffun_codeK.
+Canonical ffun_eqType := Eval hnf in EqType (I -> X) ffun_EqMixin.
+
+Definition ffun_ChoiceMixin := CanChoiceMixin ffun_codeK.
+Canonical ffun_choiceType := Eval hnf in ChoiceType ffun_eqType ffun_ChoiceMixin.
+
 Definition ffun_nominal_setoid_mixin :=
-  @PermSetoidMixin _ (@eq {ffun I -> X}) atom ffunact ffunact1 ffunactM ffunactproper.
+  @PermSetoidMixin _ (@eq (I -> X)) atom ffunact ffunact1 ffunactM ffunactproper.
 
 Canonical ffun_nominal_mixin :=
-  @NominalMixin (finfun_choiceType I X) atom ffun_nominal_setoid_mixin _ ffunact_id.
+  @NominalMixin ffun_choiceType atom ffun_nominal_setoid_mixin _ ffunact_id.
 
 Canonical ffun_nominal_type :=
-  @NominalType atom (finfun_choiceType I X) ffun_nominal_mixin.
+  @NominalType atom ffun_choiceType ffun_nominal_mixin.
 
 End Nominalffun.
 
