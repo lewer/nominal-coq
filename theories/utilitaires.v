@@ -194,3 +194,11 @@ apply: (@iff_trans _ (B /\ C)).
   exact: and_iff_compat_r.
 exact: and_iff_compat_l.
 Qed. 
+
+Lemma forall_iff {A} (P Q : A -> Prop) : 
+  (forall x, P x  <-> Q x) -> ((forall x, P x) <-> (forall x, Q x)).
+Proof.
+move => all_P_eq_Q.
+split => H x.    
+all: exact/all_P_eq_Q. 
+Qed.

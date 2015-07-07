@@ -20,6 +20,9 @@ Import Key.Exports.
 Definition atom := nat_KeyType.
 Definition atom_type := keyType.
 
+Axiom funext : forall {X : Type} {I : finType} (f g : I -> X),
+                 f =1 g -> f = g.
+
 Section NominalDef.
 
 Record perm_setoid_mixin (X : Type) (R : X -> X -> Prop) (A : atom_type)
@@ -320,6 +323,48 @@ Proof. by apply/mem_im/finperm_inj. Qed.
 
 End NominalAtomSubsets. 
 
+Section Nominalffun.
+
+Context (X : nominalType atom) (I : finType).
+
+Definition ffunact π (f : {ffun I -> X}) := [ffun i => π \dot f i].
+
+Lemma ffunact1 : ffunact (1 atom) =1 id.
+Proof.
+move => f /=.
+apply/ffunP => i.
+by rewrite ffunE act1.
+Qed.
+
+Lemma ffunactM : forall π π' f, ffunact (π * π') f = ffunact π (ffunact π' f).
+Proof.
+move => π π' f /=. 
+apply/ffunP => i.
+by rewrite !ffunE actM.
+Qed.
+
+Lemma ffunactproper (f g : {ffun I -> X}) π : f = g -> (ffunact π f) = (ffunact π g).
+Proof. by move => ->. Qed.
+
+Lemma ffunact_id (π : {finperm atom}) (f : {ffun I -> X}) :
+  (forall b, b \in (\fbigcup_(i in I) (support (f i))) -> π b = b) -> ffunact π f = f.
+Proof.
+move => fsupp /=.
+apply/ffunP => i.
+rewrite ffunE. apply/act_id => a a_supp_fi.
+apply/fsupp/fbigcupP. by exists i.
+Qed.
+
+Definition ffun_nominal_setoid_mixin :=
+  @PermSetoidMixin _ (@eq {ffun I -> X}) atom ffunact ffunact1 ffunactM ffunactproper.
+
+Canonical ffun_nominal_mixin :=
+  @NominalMixin (finfun_choiceType I X) atom ffun_nominal_setoid_mixin _ ffunact_id.
+
+Canonical ffun_nominal_type :=
+  @NominalType atom (finfun_choiceType I X) ffun_nominal_mixin.
+
+End Nominalffun.
 
 Section Freshness.
 
@@ -559,6 +604,13 @@ apply IH => x xl; apply/Hbl.
 by rewrite in_cons xl orbT.
 Qed.
 
+Lemma fresh_map {T : finType} {X : nominalType atom} (f : T -> X) a :
+  a # [seq f i | i : T] -> forall i, a # f i.
+Proof.
+move/fresh_list => H i.
+exact/H/map_f/mem_enum. 
+Qed.
+
 Lemma fresh_perm (X : nominalType atom) (π : {finperm atom}) (x : X) : 
   [disjoint (support x) & finsupp π] -> π \dot x = x.
 Proof.
@@ -696,17 +748,17 @@ End EquivariantFunctions.
 
 (* Implicit Types (V W X Y Z : nominalType atom) (π : {finperm atom}) (S : {fset atom}). *)
 
-(* Definition fsupports1 {X Y} (f : X -> Y) S :=  *)
+(* Definition fsupports1 {X Y} (f : X -> Y) S := *)
 (*   forall a b x, (swap a b) \dot (f x) = f (swap a b \dot x). *)
 
-(* Definition finitely_supported1 X Y (f : X -> Y) :=  *)
+(* Definition finitely_supported1 X Y (f : X -> Y) := *)
 (*   exists S, fsupports1 f S. *)
 
 (* Definition fsupports2 X Y Z (f : X -> Y -> Z) S := *)
-(*    forall a b x y, swap a b \dot (f x y) =  *)
+(*    forall a b x y, swap a b \dot (f x y) = *)
 (*                    f (swap a b \dot x) (swap a b \dot y). *)
 
-(* Definition finitely_supported2 X Y Z (f : X -> Y -> Z) :=  *)
+(* Definition finitely_supported2 X Y Z (f : X -> Y -> Z) := *)
 (*   exists S, fsupports2 f S. *)
 
 (* Definition fsupports *)
@@ -751,7 +803,7 @@ End EquivariantFunctions.
 
 Section SomeAny.
 
-Variables (X : nominalType atom).
+Implicit Type (X : nominalType atom).
 
 Definition new (P : atom -> Prop) :=
   exists A : {fset atom}, forall a, a # A -> P a.
@@ -760,7 +812,7 @@ Notation "\new a , P" := (new (fun a : nat => P))
    (format "\new  a ,  P", at level 10).
 Notation "a # x" := (fresh a x) (x at level 60, at level 60).
 
-Theorem some_any (R : atom -> X -> Prop) :
+Theorem some_any X (R : atom -> X -> Prop) :
   equivariant_prop R ->
   forall x : X, [/\
       (forall a : atom , a # x -> R a x) -> (\new a, (R a x)),
@@ -782,7 +834,7 @@ move => Requi; split.
     by apply/Requi.
 Qed.
 
-Lemma new_forall (R : atom -> X -> Prop) :
+Lemma new_forall X (R : atom -> X -> Prop) :
   equivariant_prop R ->
   forall x : X, ((\new a, (R a x)) <-> (forall a, a # x -> R a x)).
 Proof.
@@ -790,7 +842,7 @@ move=> Requi x. have [? ne ef] := some_any Requi x.
 by split => // /ne /ef.
 Qed.
 
-Lemma new_exists  (R : atom -> X -> Prop) :
+Lemma new_exists X (R : atom -> X -> Prop) :
   equivariant_prop R -> 
   forall x : X, ((\new a, (R a x)) <-> (exists2 a, a # x & R a x)).
 Proof.
@@ -798,7 +850,7 @@ move=> Requi x; have [fn nf nh ef] := some_any Requi x.
 by split => [/nf/nh|/ef].
 Qed.
 
-Lemma fresh_new (R : atom -> X -> Prop) :
+Lemma fresh_new X (R : atom -> X -> Prop) :
   equivariant_prop R ->
   forall x: X, R (fresh_in x) x <-> \new a, (R a x). 
 Proof.
@@ -806,7 +858,7 @@ move=> Requi x. have [fn nf nh ef] := some_any Requi x.
 by split => [/nh/ef/fn | /nf]. 
 Qed.
 
-Lemma some_fresh_new (R : atom -> X -> Prop) :
+Lemma some_fresh_new X (R : atom -> X -> Prop) :
   equivariant_prop R ->
   forall (y : atom) (x : X), y # x -> (R y x) <-> \new a, (R a x).
 Proof.  
@@ -825,6 +877,18 @@ split.
 all: move => [S] HS; exists S => a aFS.
 all: exact/P1_eq_P2/(HS _ aFS).
 Qed.
+
+Lemma new_all {Y : finType} (P : Y -> atom -> Prop) :
+  \new z, (forall y, P y z) <-> forall y, \new z, (P y z).
+Proof.
+split.
+  move => [S] HS y.
+  exists S => a aFS.
+  exact/HS.
+move/fin_all_exists => [Supp] HSupp.
+exists (\fbigcup_(y in Y) (Supp y)) => a aFSuppy y.
+apply HSupp.
+Admitted.
 
 Lemma new_and P1 P2 : 
   \new z, (P1 z /\ P2 z) <-> (\new z, (P1 z) /\ \new z, (P2 z)).

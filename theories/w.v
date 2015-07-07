@@ -91,12 +91,13 @@ Definition rW_nominal_setoid_mixin :=
   @PermSetoidMixin rW (@eq rW) atom rW_act rW_act1 
                    rW_actM rW_actproper.   
 
+
 Fixpoint rW_support t :=
   match t with
     |rVar x => [fset x]
     |rCons c a f => support a `|` 
-                    \fbigcup_(i in 'I_(cons_arity c)) (rW_support (f i))
-    |rBCons c x a f => x |` (support a `|` 
+                    \fbigcup_ (i in 'I_(cons_arity c)) (rW_support (f i))
+    |rBCons c x a f => x |` ((support a) `|`
                        \fbigcup_(i in 'I_(bcons_arity c)) (rW_support (f i)))
   end.
 
@@ -110,11 +111,11 @@ Lemma rW_act_id (π : {finperm atom}) (t : rW) :
 Proof.
 elim : t => [x|c a f IH|c x a f IH] Hsupp /=.
   - by rewrite Hsupp // in_fset1.
-  - rewrite act_id; last first. 
+  - rewrite act_id; last first.
       move => x x_supp_a. apply/Hsupp. by rewrite in_fsetU x_supp_a.
-    congr rCons. 
+    congr rCons.
     apply/funext => i. apply/IH => x x_supp_fi.
-    apply/Hsupp/fsetUP; right. 
+    apply/Hsupp/fsetUP; right.
     apply/fbigcupP. by exists i.
   - rewrite Hsupp; last exact/fset1U1.
     rewrite act_id; last first.
@@ -137,24 +138,6 @@ Canonical rW_nominalType :=
 
 Section rDepth.
   
-(* Lemma rdepth_cons_leq {c} {l} {n} :  *)
-(*   rW_depth (rCons c l) <= n.+1 ->  *)
-(*   all (fun t : rW  => rW_depth t <= n) l. *)
-(* Proof. *)
-(* rewrite ltnS => /maxlist_leqP Hl. *)
-(* apply/allP => x xl.  *)
-(* exact/Hl/map_f. *)
-(* Qed. *)
-
-(* Lemma rdepth_bcons_leq {c} {l} {n} x :  *)
-(*   rW_depth (rBinderCons c x l) <= n.+1 ->  *)
-(*   all (fun t : rW  => rW_depth t <= n) l. *)
-(* Proof. *)
-(* rewrite ltnS => /maxlist_leqP Hl. *)
-(* apply/allP => t tl.  *)
-(* exact/Hl/map_f. *)
-(* Qed. *)
-
 Lemma rdepth_perm (π : {finperm atom}) (t : rW) : 
 rW_depth (π \dot t) = rW_depth t.
 Proof. 
@@ -170,14 +153,34 @@ Fixpoint alpha_rec (n : nat) (W1 W2 : rW ) :=
   match n, W1, W2 with
     |_, rVar x, rVar y => x == y
     |S n, rCons c1 a1 f1, rCons c2 a2 f2 => 
-     (c1 == c2) && (a1 == a2) && 
-     [forall i < bcons_arity c
-    |S n, rBinderCons c1 x children1, rBinderCons c2 y children2 =>
-     (c1 == c2) && 
-     (let z := fresh_in (x, children1, y, children2) in
-      all2 (alpha_rec n)
-           (swap x z \dot children1)
-           (swap y z \dot children2))
+     match (eq_comparable c1 c2) with
+       |left p => (eq_rect c1 
+                  (fun c => forall (a2 : cons_annot c) 
+                                   (f2 : 'I_(cons_arity c) -> rW), bool) 
+                  (fun a2 f2 => 
+                     (a1 == a2) && 
+                     [forall i in 'I_(cons_arity c1), alpha_rec n (f1 i) (f2 i)]) c2 p)
+                    a2 f2
+       |right _ => false
+     end
+    |S n, rBCons c1 x1 a1 f1, rBCons c2 x2 a2 f2 =>
+     match (eq_comparable c1 c2) with
+       |left p => 
+        (eq_rect c1
+                 (fun c => 
+                    forall 
+                      (x2 : atom)
+                      (a2 : bcons_annot c)
+                      (f2 : 'I_(bcons_arity c) -> rW), bool)
+                 (fun x2 a2 f2 =>
+                    (a1 == a2) && 
+                     let m := bcons_arity c1 in
+                     let z := fresh_in (x1, x2, [seq f1 i | i : 'I_m], [seq f2 i | i : 'I_m]) in
+                     [forall i in 'I_m, alpha_rec n (swap x1 z \dot f1 i)
+                                                    (swap x2 z \dot f2 i)]) c2 p)
+          x2 a2 f2                            
+       |right _ => false
+     end
     |_, _,_ => false
   end.
 
@@ -188,166 +191,160 @@ Lemma alpha_recE n (W1 W2 : rW) :
   alpha_rec n W1 W2 = alpha W1 W2.
 Proof.
 rewrite /alpha; move: {-2}n (leqnn n). 
-elim: n W1 W2 => // [|n ihn] [x|a|c1 l1|c1 x1 l1] [y|b|c2 l2|c2 x2 l2] [|m] //.
-  - rewrite ltnS => m_leq_n /rdepth_cons_leq /allP IHl1 /=.
-    apply andb_id2l => _. 
-    apply eq_in_all2 => t1 t2 t1l2 t2l2.
-    rewrite !ihn //; last exact: IHl1.
-      apply/(@leq_trans m) => //. 
-      exact/maxlist_map_leqP.
-    exact/in_maxlist/map_f.
-  - rewrite ltnS => m_leq_n /rdepth_bcons_leq /allP IHl1 /=. 
-    apply andb_id2l => _. 
-    apply eq_in_all2 => t1 t2 /mapP [?] ? -> /mapP [?] ? ->.
-    rewrite !ihn //; try rewrite rdepth_perm; last exact/IHl1;
-      last exact/in_maxlist/map_f.
-    apply (@leq_trans m) => //. 
-    exact/maxlist_map_leqP/IHl1.
+elim: n W1 W2 => // [|n ihn] [x1|c1 a1 f1|c1 x1 a1 f1] [x2|c2 a2 f2|c2 x2 a2 f2] [|m] //.
+all: rewrite ltnS => m_leq_n IHf1 /=. 
+all: case: (eq_comparable c1 c2) => // p. 
+all: destruct p => /=; apply andb_id2l => _. 
+all: apply eq_forallb => i. 
+all: rewrite !ihn // ?rdepth_perm; 
+  first exact/(@leq_trans m); first exact/leq_bigmax.
+all: move: IHf1 => /bigmax_leqP /(_ i); exact.
 Qed.
-
-(* dans la preuve précédente comment éviter la répétition de deux sous-preuves *)
-(* identiques ? Il faudrait pouvoir appliquer depth_cons_leq au premier sous but *)
-(* et depth_bcons_leq au deuxième *)
-
-Lemma alpha_VarE (x y : atom) :
-  alpha (rVar x) (rVar y) = (x == y).
-Proof. by rewrite /alpha. Qed.
-
-Lemma alpha_AnnotE (a b : annot_label) : 
-  alpha (rAnnot a) (rAnnot b) = (a == b).
-Proof. by rewrite /alpha. Qed.
-
-Lemma alpha_ConsE (c1 c2 : cons_label) l1 l2 : 
-  alpha (rCons c1 l1) (rCons c2 l2) = (c1 == c2) && all2 alpha l1 l2.
-Proof. 
-rewrite/alpha /=. 
-apply andb_id2l => _. apply eq_in_all2 => t1 t2 ? ?.
-rewrite alpha_recE //. 
-exact/in_maxlist/map_f.
-Qed.
-
-Lemma alpha_BinderConsE (c1 c2 : bcons_label) x1 x2 l1 l2  : 
-  alpha (rBinderCons c1 x1 l1) (rBinderCons c2 x2 l2) = 
-  (c1 == c2) &&
-  let z := fresh_in (x1,l1,x2,l2) in
-  all2 alpha (swap x1 z \dot l1) (swap x2 z \dot l2).
-Proof. 
-rewrite /alpha /=. 
-apply andb_id2l => _. 
-apply eq_in_all2 => t1 t2 /mapP [?] ? -> /mapP [?] ? ->. 
-rewrite alpha_recE // rdepth_perm.
-exact/in_maxlist/map_f.
-Qed.
-
-Definition alphaE := (alpha_VarE, alpha_AnnotE, alpha_ConsE, alpha_BinderConsE).
 
 Lemma alpha_equivariant (W1 W2 : rW ) (π : {finperm atom}):
   alpha (π \dot W1) (π \dot W2) = alpha W1 W2.
 Proof.
 rewrite/alpha rdepth_perm.
 move: {-1}(rW_depth W1) (leqnn (rW_depth W1)) => n.
-elim: n W1 W2 π => [|n IHn] [x1|a1|c1 l1|c1 x1 l1] [x2|a2|c2 l2|c2 x2 l2] π //=;
+elim: n W1 W2 π => [|n IHn] [x1|c1 a1 f1|c1 x1 a1 f1] 
+                            [x2|c2 a2 f2|c2 x2 a2 f2] π //=;
   try solve [rewrite inj_eq //; exact: act_inj].
-all: rewrite ltnS => /maxlist_map_leqP IHl1.
-all: apply andb_id2l => _. 
-all: rewrite !all2_map; apply eq_in_all2 => t1 t2 ? ?.
+all: rewrite ltnS => /bigmax_leqP IHl1.
+all: case: (eq_comparable c1 c2) => p //; destruct p => /=.
+all: rewrite (inj_eq (@act_inj _ _ π)); apply andb_id2l => _. 
+all: apply eq_forallb => i.
   exact/IHn/IHl1.
 set z := fresh_in _; set y := fresh_in _.
 rewrite -act_conj_imL -[X in alpha_rec _ _ X]act_conj_imL.
-rewrite IHn; try rewrite -[RHS](@IHn _ _ (swap y (π^-1 z))).
-  all: try (rewrite rdepth_perm; exact: IHl1). (* comment apliquer aux buts 2 et 3 ?) *)
+rewrite IHn; try rewrite -[RHS](@IHn _ _ (swap y (π^-1 z)));
+  try solve [rewrite rdepth_perm; exact: IHl1]. 
 freshTacCtxt z; freshTacCtxt y.
-rewrite -{1}[t1](@act_fresh _ y (π^-1 z)) //; try freshTacList;
-  last exact: im_inv_fresh.
-rewrite -{1}[t2](@act_fresh _ y (π^-1 z)) //; try freshTacList;
-  last exact: im_inv_fresh. (* comment réécrire dans t1 et t2 à la fois ? *)
+rewrite -{1}[f1 i](@act_fresh _ y (π^-1 z)) //; last first.
+  apply/fresh_map/im_inv_fresh; by rewrite listactE -map_comp.  
+  exact/fresh_map. 
+rewrite -{1}[f2 i](@act_fresh _ y (π^-1 z)) //; last first.
+  apply/fresh_map/im_inv_fresh; by rewrite listactE -map_comp.  
+  exact/fresh_map. 
 rewrite 2?[in RHS]act_conj tfinpermL !tfinperm_fresh //.
 all: exact/im_inv_fresh. 
 Qed.
 
-(* Lemma alpha_equivariantR {W1 W2 : rW} {π1 π2 : {finperm atom}} x y : *)
-(*       alpha (π1 \dot W1) (π2 \dot W2) =  *)
-(*       alpha (π1 \dot (swap x y) \dot W1) (π2 \dot (swap x y) \dot W2). *)
-(* Proof. *)
-
-(*  by rewrite !alpha_equivariant. Qed. *)
 
 Lemma alpha_equivariantprop : equivariant_prop alpha.
 Proof. move => π t t' /=. by rewrite alpha_equivariant. Qed.
 
-Lemma alpha_BConsP x1 x2 c1 c2 (l1 l2 : seq rW) : 
-  reflect (c1 = c2 /\
-           \new z, (all2 (fun t1 t2 => alpha (swap x1 z \dot t1)
-                                            (swap x2 z \dot t2))
-                                            l1 l2))
-          (alpha (rBinderCons c1 x1 l1) (rBinderCons c2 x2 l2)).
+Lemma alpha_VarP (x y : atom) :
+  reflect (x = y) (alpha (rVar x) (rVar y)).
+Proof. exact/eqP. Qed.
+
+Lemma alpha_Cons_eqc (c1 c2 : cons_label) a1 a2 f1 f2 :
+  alpha (@rCons c1 a1 f1) (@rCons c2 a2 f2) -> c1 = c2.
+Proof. rewrite/alpha/=; by case: (eq_comparable c1 c2). Qed.
+
+Lemma alpha_ConsP (c : cons_label) (a1 a2 : cons_annot c) f1 f2 :
+  reflect (a1 = a2 /\ forall i, alpha (f1 i) (f2 i)) 
+          (alpha (@rCons c a1 f1) (@rCons c a2 f2)).
+Proof.
+rewrite/alpha /=.
+case: (eq_comparable c c) => p //.
+have -> /= : p = erefl c by apply eq_axiomK.
+(* comment prouver reflect sans iffP idP ? *)
+apply: (iffP idP).
+  move/andP => [/eqP -> /forallP] H.
+  split => // i; move: (H i) => /=.
+  rewrite alpha_recE //.
+  exact/(@leq_bigmax _ (fun i => rW_depth (f1 i))). (* comment éviter ça ? *)
+move => [->] H; rewrite eqxx /=.
+apply/forallP => i /=.
+rewrite alpha_recE; first exact/H.
+exact/(@leq_bigmax _ (fun i => rW_depth (f1 i))). 
+Qed.
+
+Lemma alpha_BCons_eqc (c1 c2 : bcons_label) x1 x2 a1 a2 f1 f2 :
+  alpha (@rBCons c1 x1 a1 f1) (@rBCons c2 x2 a2 f2) -> c1 = c2.
+Proof. rewrite/alpha/=; by case: (eq_comparable c1 c2). Qed.
+
+Lemma alpha_BConsP (c : bcons_label) (x1 x2 : atom) a1 a2 f1 f2  :
+  reflect (a1 = a2 /\ 
+           let n := bcons_arity c in
+           \new z, (forall i, alpha (swap x1 z \dot (f1 i)) (swap x2 z \dot (f2 i))))
+          (alpha (@rBCons c x1 a1 f1) (@rBCons c x2 a2 f2)).
 Proof.
 move : (equi_funprop (@swap_equiv _) alpha_equivariantprop) => /= Requi.
-rewrite alphaE.
-apply/(equivP andP); apply and_iff_congr => /=.
+rewrite /alpha /=.
+case: (eq_comparable c c) => p //.
+have -> /= : p = erefl c by apply eq_axiomK.
+set z := fresh_in _. 
+apply: (equivP andP); apply and_iff_congr => /=.
   by symmetry; apply (rwP eqP).
-rewrite all2_map.
-eapply iff_stepl. by symmetry; apply new_all2.
-eapply iff_stepl. by apply (rwP (@all2P _ _ _ _)). 
-apply/eq_in_all2_prop => t1 t2 t1l1 t2l2.
-apply (@some_fresh_new _ _ Requi _ ((x1, t1), (x2, t2))).
-freshTac => *.
-apply/fresh_prod; split; apply/fresh_prod;split => //.
-all: by freshTacList.
+eapply iff_stepl. by symmetry; apply/new_all.
+eapply iff_stepl. exact/(rwP forallP).
+apply forall_iff => i.
+rewrite alpha_recE ?rdepth_perm; 
+  last exact/(@leq_bigmax _ (fun i => rW_depth (f1 i))). 
+apply (@some_fresh_new _ _ Requi _ ((x1, f1 i), (x2, f2 i))).
+freshTacCtxt z.
+repeat (apply/fresh_prod; split) => //.
+all: exact/fresh_map.
 Qed.
 
 Lemma alpha_refl : reflexive alpha.
 Proof.
-elim/rW_better_ind => [x|a|c l|c x l]; rewrite alphaE eqxx //= => Hrefl.
-all: apply all2_refl => t.
-  exact/Hrefl.
-move/mapP => [?] ? ->. 
-rewrite alpha_equivariant. exact/Hrefl.
+elim => [x|c a f IH|c x a f IH]. 
+  - exact/alpha_VarP.
+  - by apply/alpha_ConsP; split.
+  - apply/alpha_BConsP; split => //=.
+    exists fset0 => b _ i. 
+    by rewrite alpha_equivariant.
 Qed.
 
 Lemma alpha_sym : symmetric alpha.
 Proof.
 move => t1 t2; rewrite/alpha.
 move: {-1}(rW_depth t1) (leqnn (rW_depth t1)) => n.
-elim: n t1 t2 => [|n IHn] [x1|a1|c1 l1|c1 x1 l1] [x2|a2|c2 l2|c2 x2 l2] //=;
-rewrite eq_sym.
-all: rewrite ltnS => /maxlist_map_leqP depth_l1_leqn.
-all: apply andb_id2l => _.
-2: rewrite !all2_map.
-all: apply all2_sym => t1 t2 t1l1 t2l2.
-all: rewrite /switch IHn ?rdepth_perm; last by apply depth_l1_leqn.
-  exact/sym_eq/alpha_recE/in_maxlist/map_f.
-rewrite !alpha_recE; last first.
-  by rewrite rdepth_perm. 
-  rewrite rdepth_perm; exact/in_maxlist/map_f.
-suff : fresh_in (x1, l1, x2, l2) = fresh_in (x2, l2, x1, l1) by move ->.
-suff : support (x1, l1, x2, l2) = support (x2, l2, x1, l1) 
-  by rewrite/fresh_in => ->. 
-repeat (rewrite/support/=).
-by rewrite -fsetUA fsetUC fsetUA. 
+elim: n t1 t2 => [|n IHn] [x1|c1 a1 f1|c1 x1 a1 f1] [x2|c2 a2 f2|c2 x2 a2 f2] //=.
+all: rewrite ltnS => /bigmax_leqP depth_f1_leqn.
+all: case: (eq_comparable c1 c2) => p. 
+all: case: (eq_comparable c2 c1) => q. 
+all: try congruence.
+all: have -> : q = sym_eq p by exact/eq_irrelevance.
+all: destruct p => /=; rewrite eq_sym; apply andb_id2l => _.
+all: apply/eq_forallb => i.
+all: rewrite IHn ?rdepth_perm; last exact/depth_f1_leqn.
+  rewrite !alpha_recE //; exact/(@leq_bigmax _ (fun i => rW_depth (f2 i))).
+set y := fresh_in _. set z := fresh_in _.
+rewrite !alpha_recE ?rdepth_perm //; last first.
+  exact/(@leq_bigmax _ (fun i => rW_depth (f2 i))).
+suff : y = z by move ->.
+rewrite/y/z/fresh_in/=; repeat (rewrite/support/=).
+by rewrite eq_fset2 -fsetUA [list_support _ `|` list_support _]fsetUC fsetUA.
 Qed.
 
 Lemma alpha_trans : transitive alpha.
 move => t2 t1 t3.
 move: {-1}(rW_depth t1) (leqnn (rW_depth t1)) => n.
-elim: n t1 t2 t3 => [|n IHn] [x1|a1|c1 l1|c1 x1 l1] 
-                             [x2|a2|c2 l2|c2 x2 l2] 
-                             [x3|a3|c3 l3|c3 x3 l3] //=; 
+elim: n t1 t2 t3 => [|n IHn] [x1|c1 a1 f1|c1 x1 a1 f1] 
+                             [x2|c2 a2 f2|c2 x2 a2 f2] 
+                             [x3|c3 a3 f3|c3 x3 a3 f3] //=;
 try solve [move => _; apply eq_op_trans].
-all: rewrite ltnS => /maxlist_map_leqP deptht1_leqn.
-  rewrite !alphaE => /andP [c1_eq_c2 Hl1l2] /andP [c2_eq_c3 Hl2l3].
-  rewrite (eq_op_trans c1_eq_c2 c2_eq_c3) /=.
-  move: Hl1l2 Hl2l3; apply all2_trans => t1 t2 t3 t1l1 t2l2 t3l3.
-  by apply/IHn; auto.
-move => /alpha_BConsP [c1_eq_c2 /new_all2 alpha_l1l2].
-move => /alpha_BConsP [c2_eq_c3 /new_all2 alpha_l2l3].
-apply/alpha_BConsP; split; first exact: eq_trans c1_eq_c2 c2_eq_c3.
-apply/new_all2. move: alpha_l1l2 alpha_l2l3.
-apply all2_prop_trans => t1 t2 t3 t1l1 t2l2 t3l3 [St1t2] HSt1t2 [St2t3] HSt2t3.
-exists (St1t2 `|` St2t3) => a aFSt1t2St2t3.
-move: (HSt1t2 _ (fresh_fsetU1 aFSt1t2St2t3)) (HSt2t3 _ (fresh_fsetU2 aFSt1t2St2t3)).
-apply IHn.
-by rewrite rdepth_perm; auto.
+all: rewrite ltnS => /bigmax_leqP depthf1_leqn.
+all: have [/eqP c1_eq_c2 |/eqP c1_neq_c2] := boolP (c1 == c2).
+  2: by move/alpha_Cons_eqc.
+  3: by move/alpha_BCons_eqc.
+all: have [/eqP c2_eq_c3 |/eqP c2_neq_c3] := boolP (c2 == c3).
+  2: by move => _ /alpha_Cons_eqc.
+  3: by move => _ /alpha_BCons_eqc.
+all: subst.
+  move/alpha_ConsP => [a1_eq_a2 alpha_f1f2] /alpha_ConsP [a2_eq_a3 alpha_f2f3].
+  apply/alpha_ConsP; split; first exact/(@eq_trans _ a1 a2 a3).
+  move => i. apply/(IHn (f1 i) (f2 i) (f3 i)) => //.
+  exact/depthf1_leqn.
+move/alpha_BConsP => [a1_eq_a2 /= [S1] HS1] /alpha_BConsP [a2_eq_a3 /= [S2] HS2].
+apply/alpha_BConsP; split; first exact/(@eq_trans _ a1 a2 a3).
+exists (S1 `|` S2) => a aFS1S2 i.
+apply/IHn; first by rewrite rdepth_perm; apply/depthf1_leqn.
+  exact/HS1/(fresh_fsetU1 aFS1S2).
+exact/HS2/(fresh_fsetU2 aFS1S2).
 Qed.
 
 End AlphaEquivalence.
@@ -369,33 +366,28 @@ Canonical W_eqQuotType := Eval hnf in
 Lemma alpha_eqE t t' : alpha t t' = (t == t' %[mod W]).
 Proof. by rewrite piE. Qed.
 
-Lemma all2_alpha_eq l1 l2 : 
-  all2 alpha l1 l2 -> 
-  map \pi_W l1 = map \pi_W l2. 
-Proof.
-move => /all2P alpha_l1l2. apply/all2_prop_eq/all2_prop_map.
-move : alpha_l1l2; apply eq_in_all2_prop => t1 t2 t1s1 t2s2.
-rewrite alpha_eqE. 
-by split; move/eqP.
-Qed.
+(* Lemma all2_alpha_eq l1 l2 :  *)
+(*   all2 alpha l1 l2 ->  *)
+(*   map \pi_W l1 = map \pi_W l2.  *)
+(* Proof. *)
+(* move => /all2P alpha_l1l2. apply/all2_prop_eq/all2_prop_map. *)
+(* move : alpha_l1l2; apply eq_in_all2_prop => t1 t2 t1s1 t2s2. *)
+(* rewrite alpha_eqE.  *)
+(* by split; move/eqP. *)
+(* Qed. *)
 
 Definition Var x := lift_cst W (rVar x).
 Lemma rVarK x : \pi_W (rVar x) = Var x.
 Proof. by unlock Var. Qed.
 
-Definition Annot a := lift_cst W (rAnnot a).
-Lemma rAnnotK a : \pi_W (rAnnot a) = Annot a.
-Proof. by unlock Annot. Qed.
+Notation lift_map cons := 
+  (locked (fun f => \pi_W (cons (fun i => (@repr _ W_quotType (f i)))))).
 
-Notation lift_map f := 
-  (locked (fun l : seq W => \pi_W (f (map (@repr _ W_quotType) l)))).
-
-Definition Cons c := lift_map (rCons c).
-Lemma rConsK c l : \pi_W (rCons c l) = Cons c (map \pi_W l).
+Definition Cons c a := lift_map (@rCons c a).
+Lemma rConsK c a f : \pi_W (@rCons c a f) = @Cons c a (\pi \o f).
 Proof.
 unlock Cons; apply/eqP. 
-rewrite [_ == _]piE alphaE eqxx /= -map_comp.
-rewrite all2_mapr. apply all2_refl => t _ /=.
+rewrite [_ == _]piE. apply/alpha_ConsP; split => // i.
 by rewrite alpha_eqE reprK.
 Qed.
 

@@ -2314,4 +2314,19 @@ apply: (iffP idP); elim: l.
     apply IHl. by exists t.
 Qed.
 
+Lemma eq_fset2 (x1 x2 : K) : [fset x1; x2] = [fset x2; x1].
+Proof.
+apply/fsetP => x. by rewrite !in_fset2 orbC.
+Qed.
+
 End LemmesGabriel.
+
+Notation "\fbigcup_ ( i 'in' A ) F" :=
+  (\big[@fsetU _/fset0]_(i in A) F%fset) (at level 1): fset_scope.
+Notation "\fbigcup_ ( i < n ) F" :=
+  (\big[@fsetU _/fset0]_ (i < n) F%fset) (at level 0) : fset_scope.
+
+Lemma fbigcupP {K : keyType} {I : finType} (F : I -> {fset K}) x :
+  reflect (exists i, x \in F i) (x \in \fbigcup_(i in I) (F i)).
+Proof.
+Admitted.
