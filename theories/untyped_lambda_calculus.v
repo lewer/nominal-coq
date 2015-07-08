@@ -3,7 +3,7 @@ Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
 From MathComp
 Require Import bigop  finfun finset generic_quotient perm tuple fingroup.
 From Nominal
-Require Import finmap finsfun finperm nominal.
+Require Import finmap finsfun finperm nominal w.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -14,71 +14,66 @@ Local Open Scope finperm_scope.
 Local Open Scope fset.
 Local Open Scope quotient_scope.
 
-Section SubstDef.
+Import Key.Exports.
 
-Variables (x : atom) (t : term).
+Section Definitions.
 
-Definition dflt := Var 0.
+Inductive cons_label := app.
+Inductive bcons_label := lam.
 
-Definition subst_f1 y := if x == y then t else Var y.
-Definition subst_f2 (t1 t2 : term) subst_t1 subst_t2 :=
-  App subst_t1 subst_t2.
-Definition subst_f3 x (t : term) subst_t := Lambda x subst_t.
+Definition cons_label_I0 x := match x with |app => 0 end.
+Definition I0_cons_label (n : nat) := match n with |_ => app end.
+Lemma cons_label_I0K : cancel cons_label_I0 I0_cons_label.
+Proof. by case. Qed.
 
-Lemma if_equivariant (X : nominalType) (b : bool) (t1 t2 : X) π :
-  (π \dot (if b then t1 else t2)) = (if b then (π \dot t1) else (π \dot t2)). 
-Proof. by case: b. Qed.
+Definition cons_label_EqMixin := CanEqMixin cons_label_I0K.
+Canonical cons_label_eqType := Eval hnf in EqType cons_label cons_label_EqMixin.
 
-Lemma support_subst_f1 : function_support1 subst_f1 (x |` support t).
-Proof.
-move=>π; rewrite fset1_disjoint => /andP [xNπ disj_t_π] y.
-have xNπinv : x \notin finsupp π^-1 by [].
-by rewrite/subst_f1 if_equivariant Var_equiv atomactE [_ == π _]eq_sym 
-finperm_can2eq eq_sym (finsfun_dflt xNπinv) (fresh_perm disj_t_π).
-Qed.
+Definition bcons_label_I0 x := match x with |lam => 0 end.
+Definition I0_bcons_label (n : nat) := match n with |_ => lam end.
+Lemma bcons_label_I0K : cancel bcons_label_I0 I0_bcons_label.
+Proof. by case. Qed.
 
-Lemma support_subst_f2 : function_support4 subst_f2 fset0.
-Proof.
-move => π _ t1 t2 u1 u2. 
-by rewrite /subst_f2 App_equiv.
-Qed.
+Definition bcons_label_EqMixin := CanEqMixin bcons_label_I0K.
+Canonical bcons_label_eqType := Eval hnf in EqType bcons_label bcons_label_EqMixin.
 
-Lemma support_subst_f3 : function_support3 subst_f3 fset0.
-Proof.
-move => π _ y u v.
-by rewrite /subst_f3 Lam_equiv.
-Qed.
+Definition cons_annot c := match c with |app => unit_eqType end.
+Definition cons_arity c := match c with |app => 2 end.
+Definition bcons_annot c := match c with |lam => unit_eqType end. 
+Definition bcons_arity c := match c with |lam => 1%nat end.
 
-Lemma FCB_f3 : FCB_supp fset0 subst_f3.
-Proof. move => a u rec_u _. rewrite /subst_f3. exact: bname_fresh. Qed.
+Definition term := W cons_annot cons_arity bcons_annot bcons_arity.
 
+Variable x : 'I_2.
+Goal True.
+elim: x.
 
-Definition subst := term_altrect subst_f1 subst_f2 subst_f3 (x |` support t) fset0 fset0 dflt.
+Definition Var := Var cons_annot cons_arity bcons_annot bcons_arity : atom -> term.
 
-Lemma subst_VarE y : subst (Var y) = if x == y then t else Var y. 
-Proof.
-by rewrite/subst term_altrect_VarE /subst_f1.
-Qed.
+Definition App_subproof (t1 t2 : term) (i : 'I_2) : term.
+case: i. case. 
+  exact (fun _ => t1). 
+case.
+  exact (fun _ => t2).
+done.
+Defined.
 
-Lemma subst_AppE t1 t2 : subst (App t1 t2) = App (subst t1) (subst t2).
-Proof.
-by rewrite/subst term_altrect_AppE /subst_f2.
-Qed.
+Definition Lam_subproof (t : term) (i : 'I_1) : term. 
+case: i. case.
+  exact (fun _ => t).
+done.
+Defined.
 
-Lemma subst_LamE y u : y # (x, t) -> subst (Lambda y u) = Lambda y (subst u).
-Proof.
-move => yFxt.
-apply term_altrect_LamE.
-  exact: support_subst_f1.
-  exact: support_subst_f2.
-  exact: support_subst_f3.
-  exact: FCB_f3. admit.
-Admitted.
+(* comment on définit une fonction 'I_n -> X ? *)
 
-End SubstDef.
+Definition App t1 t2 := @Cons cons_label_eqType bcons_label_eqType 
+                        cons_annot cons_arity bcons_annot bcons_arity app tt
+                        (App_subproof t1 t2).
 
-Notation " t { x := u } " := (subst x u t) (at level 0).
-
+Definition Lam x t := @BCons cons_label_eqType bcons_label_eqType
+                             cons_annot cons_arity bcons_annot bcons_arity lam x tt
+                             (Lam_subproof t).
+                           
 Lemma forget x u t : x # u -> u{x := t} = u.
 Proof.
 
