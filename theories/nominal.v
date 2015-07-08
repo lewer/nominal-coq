@@ -359,7 +359,7 @@ apply/fsupp/fbigcupP. by exists i.
 Qed.
 
 Definition code_ffun : (I -> X) -> GenTree.tree nat. Admitted.
-Definition decode_ffun : GenTree.tree nat -> (I -> X). Admitted.
+Definition decode_ffun : GenTree.tree nat -> (I-> X). Admitted.
 
 Lemma ffun_codeK : cancel code_ffun decode_ffun.
 Proof.
@@ -374,7 +374,9 @@ Definition ffun_EqMixin := CanEqMixin ffun_codeK.
 Canonical ffun_eqType := Eval hnf in EqType (I -> X) ffun_EqMixin.
 
 Definition ffun_ChoiceMixin := CanChoiceMixin ffun_codeK.
-Canonical ffun_choiceType := Eval hnf in ChoiceType ffun_eqType ffun_ChoiceMixin.
+Canonical ffun_choiceType := Eval hnf in ChoiceType _ ffun_ChoiceMixin.
+(* bizarre : si j'écris ChoiceType ffun_eqType ffun_ChoiceMixin, *)
+(* j'ai des problèmes plus loin avec /eqP ... *)
 
 Definition ffun_nominal_setoid_mixin :=
   @PermSetoidMixin _ (@eq (I -> X)) atom ffunact ffunact1 ffunactM ffunactproper.
@@ -384,6 +386,9 @@ Canonical ffun_nominal_mixin :=
 
 Canonical ffun_nominal_type :=
   @NominalType atom ffun_choiceType ffun_nominal_mixin.
+
+Lemma ffunactE π (f : I -> X) i : (π \dot f) i = π \dot f i.
+Proof. by []. Qed.
 
 End Nominalffun.
 
@@ -596,7 +601,7 @@ Lemma supports_cons {X} S (x : X) (l : seq X):
 Proof.
 move => S_supp_xl.
 split => π HS.
-all: move : (S_supp_xl π HS) => /= /eqP.
+all: move : (S_supp_xl π HS) => /= /eqP. 
 all: by rewrite !listactE /= eqseq_cons => /andP [/eqP ? /eqP ?]. 
 Qed.
 
@@ -630,6 +635,15 @@ Lemma fresh_map {T : finType} {X : nominalType atom} (f : T -> X) a :
 Proof.
 move/fresh_list => H i.
 exact/H/map_f/mem_enum. 
+Qed.
+
+Lemma fresh_fun {I : finType} {X} (f : I -> X) a i : 
+  a # f -> a # f i.
+Proof.
+move => [S] [aNS S_supp_f].
+exists S; split => // π H.
+have πf_eq_f : π \dot f = f by apply/S_supp_f.
+by rewrite -ffunactE πf_eq_f.
 Qed.
 
 Lemma fresh_perm (X : nominalType atom) (π : {finperm atom}) (x : X) : 
