@@ -763,6 +763,10 @@ apply eq_in_map => t tl /=.
 exact/f_equiv.
 Qed.
 
+Lemma if_equivariant {X : nominalType atom} (u v : X) b π : 
+  π \dot (if b then u else v) = if b then (π \dot u) else π \dot v.
+Proof. by case: b. Qed.
+
 Lemma equi_funprop X Y Z (f : X -> Y -> Z) (R : Z -> Z -> Prop) :
   equivariant2 f -> equivariant_prop R -> 
   equivariant_prop (fun (x : X) (y : Y * Y) => R (f x y.1) (f x y.2)). 

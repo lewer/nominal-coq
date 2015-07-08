@@ -22,9 +22,9 @@ Section W.
 
 Context (cons_label : eqType)
         (bcons_label : eqType)
-        (cons_annot : cons_label -> nominalType atom)
+        (cons_annot : cons_label -> eqType)
         (cons_arity : cons_label -> nat)
-        (bcons_annot : bcons_label -> nominalType atom)
+        (bcons_annot : bcons_label -> eqType)
         (bcons_arity : bcons_label -> nat).
 
 Section WDef.
@@ -58,17 +58,17 @@ Fixpoint rW_depth (t : rW) : nat :=
 Fixpoint rW_act (π : {finperm atom}) (t : rW) :=
   match t with
     |rVar x => rVar (π x)
-    |rCons c a f => @rCons c (π \dot a) (fun i => rW_act π (f i))
-    |rBCons c x a f => @rBCons c (π x) (π \dot a) (fun i => rW_act π (f i))
+    |rCons c a f => @rCons c a (fun i => rW_act π (f i))
+    |rBCons c x a f => @rBCons c (π x) a (fun i => rW_act π (f i))
   end.
 
 Lemma rW_act1 : rW_act (1 atom) =1 id.
 Proof. 
 elim => [x|c a f IH|c x a f IH] /=.
   - by rewrite finsfun1.
-  - congr rCons; first exact/act1.
+  - congr rCons.
     exact/funext/IH.
-  - rewrite finsfun1 act1. congr rBCons.
+  - rewrite finsfun1. congr rBCons.
     exact/funext/IH.
 Qed.
 
@@ -77,9 +77,9 @@ Lemma rW_actM π π' (t : rW) :
 Proof.
 elim : t => [x|c a f IH|c x a f IH] /=.
   - by rewrite finsfunM.
-  - rewrite actM. congr rCons.
+  - congr rCons.
     exact/funext/IH.
-  - rewrite finsfunM actM. congr rBCons.
+  - rewrite finsfunM. congr rBCons.
     exact/funext/IH.
 Qed.
 
@@ -94,10 +94,9 @@ Definition rW_nominal_setoid_mixin :=
 Fixpoint rW_support t :=
   match t with
     |rVar x => [fset x]
-    |rCons c a f => support a `|` 
-                    \fbigcup_ (i in 'I_(cons_arity c)) (rW_support (f i))
-    |rBCons c x a f => x |` ((support a) `|`
-                       \fbigcup_(i in 'I_(bcons_arity c)) (rW_support (f i)))
+    |rCons c a f => \fbigcup_ (i in 'I_(cons_arity c)) (rW_support (f i))
+    |rBCons c x a f => x |` 
+                       \fbigcup_(i in 'I_(bcons_arity c)) (rW_support (f i))
   end.
 
 Lemma fbigcupP {n} (F : 'I_n -> {fset atom}) x :
@@ -110,19 +109,13 @@ Lemma rW_act_id (π : {finperm atom}) (t : rW) :
 Proof.
 elim : t => [x|c a f IH|c x a f IH] Hsupp /=.
   - by rewrite Hsupp // in_fset1.
-  - rewrite act_id; last first.
-      move => x x_supp_a. apply/Hsupp. by rewrite in_fsetU x_supp_a.
-    congr rCons.
+  - congr rCons.
     apply/funext => i. apply/IH => x x_supp_fi.
-    apply/Hsupp/fsetUP; right.
-    apply/fbigcupP. by exists i.
+    apply/Hsupp/fbigcupP. by exists i.
   - rewrite Hsupp; last exact/fset1U1.
-    rewrite act_id; last first.
-      move => y y_supp_a. apply/Hsupp.
-      apply/fset1Ur. by rewrite in_fsetU y_supp_a.
     congr rBCons.
     apply/funext => i. apply/IH => y y_supp_fi.
-    apply/Hsupp; do 2 (apply/fsetUP; right).
+    apply/Hsupp/fsetUP; right. 
     apply/fbigcupP. by exists i.
 Qed.
 
@@ -210,7 +203,7 @@ elim: n W1 W2 π => [|n IHn] [x1|c1 a1 f1|c1 x1 a1 f1]
   try solve [rewrite inj_eq //; exact: act_inj].
 all: rewrite ltnS => /bigmax_leqP IHl1.
 all: case: (eq_comparable c1 c2) => p //; destruct p => /=.
-all: rewrite (inj_eq (@act_inj _ _ π)); apply andb_id2l => _. 
+all: apply andb_id2l => _. 
 all: apply eq_forallb => i.
   exact/IHn/IHl1.
 set z := fresh_in _; set y := fresh_in _.
@@ -465,7 +458,7 @@ Lemma Var_equivariant π x : π \dot (Var x) = Var (π x).
 Proof. by rewrite -rVarK pi_equivariant /= rVarK. Qed.
 
 Lemma Cons_equivariant π c a f : 
-  π \dot (@Cons c a f) = @Cons c (π \dot a) (π \dot f).
+  π \dot (@Cons c a f) = @Cons c a (π \dot f).
 Proof.
 unlock Cons. 
 rewrite pi_equivariant !rConsK. 
@@ -475,7 +468,7 @@ exact/sym_eq/eqP/repr_equivariant.
 Qed.
 
 Lemma BCons_equivariant π c x a f :
-  π \dot (@BCons c x a f) = @BCons c (π x) (π \dot a) (π \dot f).
+  π \dot (@BCons c x a f) = @BCons c (π x) a (π \dot f).
 Proof.
 unlock BCons. 
 rewrite pi_equivariant !rBConsK.
@@ -512,7 +505,7 @@ Qed.
 Lemma eq_BConsE c x1 x2 a1 a2 f1 f2 :
   @BCons c x1 a1 f1 = @BCons c x2 a2 f2 ->
   a1 = a2 /\
-  forall z, z # (x1, x2, a1, a2, f1, f2) ->
+  forall z, z # (x1, x2, f1, f2) ->
              swap x1 z \dot f1 = swap x2 z \dot f2.
 Proof.
 unlock BCons => /eqP.
@@ -588,7 +581,7 @@ Qed.
 Lemma BConsx_inj c x a1 a2 f1 f2 : 
   (@BCons c x a1 f1 = @BCons c x a2 f2) -> a1 = a2 /\ f1 = f2.
 Proof.
-pose z := fresh_in (x, a1, a2, f1, f2).
+pose z := fresh_in (x, f1, f2).
 move => /eq_BConsE [a1_eq_2] /(_ z) H.
 split => //.
 apply/(@act_inj _ _ (swap x z)).
@@ -615,16 +608,15 @@ Qed.
 (* Qed. *)
 
 Lemma fresh_rBCons x y c a f :
-  x # (@rBCons c y a f) -> x # (y, a, f).
+  x # (@rBCons c y a f) -> x # (y, f).
 Proof.
 move => [S] [xNS S_supp_cyl].
 exists S; split => // π Hπ.
 move: (S_supp_cyl π Hπ) => H.  injection H. 
 move => /eq_sigT_sig_eq [p]. 
 have -> /= : p = erefl c by apply eq_axiomK.
-move => πf_eq_f /eq_sigT_sig_eq [q].
-have -> /= : q = erefl c by apply eq_axiomK.
-by rewrite !prodactE atomactE -{2}πf_eq_f=> -> ->. 
+move => πf_eq_f.
+by rewrite prodactE atomactE -{2}πf_eq_f => ->. 
 Qed.
 
 Lemma fresh_BCons x y c a f :
@@ -634,7 +626,7 @@ move => [S] [xNS S_supp_y] [S'] [xNS' S'_supp_cyf].
 exists (S `|` S'); split.
   by rewrite in_fsetU negb_or xNS xNS'.
 move => π Hπ. 
-apply/(proj2 (@BConsx_inj c y (π \dot a) a _ _ _)).
+apply/(proj2 (@BConsx_inj c y a a _ _ _)).
 have y_eq_piy : π y = y.
   apply S_supp_y => b bS. apply Hπ.
   by rewrite in_fsetU bS.
@@ -658,12 +650,11 @@ apply/fresh_repr. change (z # ((repr \o f) i)).
 exact/fresh_fun.
 Qed.
 
-Lemma bname_fresh x c a f : x # a -> x # (@BCons c x a f).
+Lemma bname_fresh x c a f : x # (@BCons c x a f).
 Proof.
-move => xFa.
-pose y := fresh_in (x, f, a, @BCons c x a f); freshTacCtxt y.
+pose y := fresh_in (x, f, @BCons c x a f); freshTacCtxt y.
 apply (@CFN_principle y) => //.
-rewrite BCons_equivariant tfinpermL [_ \dot a]act_fresh //.
+rewrite BCons_equivariant tfinpermL. 
 exact/sym_eq/eq_BCons/fresh_prod.
 Qed.
 
@@ -750,9 +741,11 @@ Qed.
 
 Context (X : nominalType atom)
         (f_var : atom -> X)
-        (f_cons : forall (c : cons_label), ('I_(cons_arity c) -> W) -> 
+        (f_cons : forall (c : cons_label), (cons_annot c) -> 
+                                           ('I_(cons_arity c) -> W) -> 
                                            ('I_(cons_arity c) -> X) -> X)
         (f_bcons : forall (c : bcons_label), atom -> 
+                                             (bcons_annot c) ->
                                              ('I_(bcons_arity c) -> W) -> 
                                              ('I_(bcons_arity c) -> X) -> X)
         (Supp : {fset atom})
@@ -763,27 +756,27 @@ Hypothesis f_var_equivariant :
     [disjoint finsupp π & Supp] -> π \dot f_var x = f_var (π \dot x).
 
 Hypothesis f_cons_equivariant :
-  forall (π : {finperm atom}) c f f',
+  forall (π : {finperm atom}) c a f f',
     [disjoint finsupp π & Supp] ->
-                  π \dot @f_cons c f f' = 
-                  @f_cons c (π \dot f) (π \dot f').
+                  π \dot @f_cons c a f f' = 
+                  @f_cons c a (π \dot f) (π \dot f').
 
 Hypothesis f_bcons_equivariant :
-  forall (π : {finperm atom}) c x f f', 
-    [disjoint finsupp π & Supp] -> π \dot @f_bcons c x f f' = 
-                                   @f_bcons c (π x) (π \dot f) (π \dot f').                 
+  forall (π : {finperm atom}) c x a f f', 
+    [disjoint finsupp π & Supp] -> π \dot @f_bcons c x a f f' = 
+                                   @f_bcons c (π x) a (π \dot f) (π \dot f').                 
 
 Hypothesis FCB_fbcons :
-  forall x c f f', x # Supp -> x # (@f_bcons c x f f').
+  forall x c a f f', x # Supp -> x # (@f_bcons c x a f f').
 
 
 Fixpoint W_rect_rec (n : nat) (t : W):=
   match n, (repr t) with
     |_, rVar x => f_var x
-    |S n, rCons c _ f => @f_cons c (\pi \o f) ((W_rect_rec n) \o \pi \o f)
+    |S n, rCons c a f => @f_cons c a (\pi \o f) ((W_rect_rec n) \o \pi \o f)
     |S n, rBCons c x a f =>
      let z := fresh_in (Supp, @rBCons c x a f) in
-     @f_bcons c z
+     @f_bcons c z a
              (swap x z \dot (\pi_W \o f))
              ((W_rect_rec n) \o (swap x z \dot (\pi_W \o f)))
     |_, _ => dflt
@@ -813,7 +806,7 @@ Lemma W_rect_VarE x : W_rect (Var x) = f_var x.
 Proof. by rewrite /W_rect depth_Var /= VarK. Qed.
 
 Lemma W_rect_ConsE c a f : 
-  W_rect (@Cons c a f) = @f_cons c f (W_rect \o f).
+  W_rect (@Cons c a f) = @f_cons c a f (W_rect \o f).
 Proof.
 rewrite/W_rect depth_Cons /=.
 have [f' [-> ->]] := @ConsK c a f.
@@ -826,10 +819,10 @@ Qed.
 Lemma W_rect_BConsE_subproof c x a f :
   let z := (fresh_in (Supp, repr (@BCons c x a f))) in
     W_rect (@BCons c x a f) = 
-    @f_bcons c z (swap x z \dot f) (W_rect \o (swap x z \dot f)).
+    @f_bcons c z a (swap x z \dot f) (W_rect \o (swap x z \dot f)).
 have [y [f'] repr_cxf] := @BConsK c x a f => /=.
 rewrite /W_rect depth_BinderCons /= repr_cxf.
-set z := fresh_in _. 
+set z := fresh_in _.
 suff : swap y z \dot (\pi_W \o f') = swap x z \dot f.
   move => ->. congr f_bcons.
   apply/funext => i /=.
@@ -858,7 +851,7 @@ Definition equiv t :=
                                W_rect (π \dot t).
 
 Definition res c x a f := W_rect (@BCons c x a f) =
-                        @f_bcons c x f (W_rect \o f).
+                        @f_bcons c x a f (W_rect \o f).
 
 Lemma equiv_res_subproof c x a f :
 (forall i, equiv (f i)) ->
@@ -898,7 +891,7 @@ elim/(@W_ind _ Supp): t => [v|c a f IHf|c z a f zFSupp IHf] π disj_pi_S.
     apply/funext => i.
     by rewrite !ffunactE /= IHf . 
   - have Hres1 := (@equiv_res_subproof c _ _ _ IHf zFSupp).
-    have Hres2 : @res c (π z) (π \dot a) (π \dot f).
+    have Hres2 : @res c (π z) a (π \dot f).
       apply/equiv_res_subproof => //; last exact/disj_im_fresh. 
       move => i π' ? /=.
       rewrite -actM -!IHf // ?actM //; exact/disjoint_conj.
@@ -911,7 +904,7 @@ Qed.
 
 Lemma W_rect_BConsE c x a f : 
   x # Supp -> 
-  W_rect (@BCons c x a f) = @f_bcons c x f (W_rect \o f).
+  W_rect (@BCons c x a f) = @f_bcons c x a f (W_rect \o f).
 Proof.
 move => xFsupp.
 apply/equiv_res_subproof => // ? ?. 
@@ -929,14 +922,14 @@ Notation Supp := (x |` support t).
 
 Definition subst_var (y : atom) :=
   if x == y then t else Var y.
-Definition subst_annot (a : annot_label ) := Annot a.
-Definition subst_cons (c : cons_label) (l : seq W) (subst_l : seq W) :=
-  Cons c subst_l.
-Definition subst_bcons (c : bcons_label) (y : atom) (l : seq W) (subst_l : seq W) :=
-  BinderCons c y subst_l.
+Definition subst_cons (c : cons_label) a (f : 'I_(cons_arity c) -> W) res :=
+  @Cons c a res.
+Definition subst_bcons (c : bcons_label) (y : atom) a
+           (f : 'I_(bcons_arity c) -> W) res :=
+  @BCons c y a res.
 
 Definition subst := 
-  @W_rect _ subst_var subst_annot subst_cons subst_bcons Supp dflt.
+  @W_rect _ subst_var subst_cons subst_bcons Supp dflt.
 
 Lemma subst_var_equiv (π : {finperm atom}) y : 
   [disjoint finsupp π & Supp] -> 
@@ -947,43 +940,34 @@ rewrite /subst_var if_equivariant -{2}pix_x (inj_eq (@finperm_inj _ π)).
 by rewrite fresh_perm // Var_equivariant.
 Qed.
   
-Lemma subst_annot_equiv (π : {finperm atom}) a :
-  [disjoint finsupp π & Supp] -> 
-  π \dot subst_annot a = subst_annot (π \dot a).
-Proof. by rewrite /subst_annot Annot_equivariant. Qed.
-
-Lemma subst_cons_equiv (π : {finperm atom}) c l l' :
+Lemma subst_cons_equiv (π : {finperm atom}) c a f f' :
     [disjoint finsupp π & Supp] ->
-                  π \dot subst_cons c l l' = 
-                  subst_cons c (π \dot l) (π \dot l').
+                  π \dot @subst_cons c a f f' = 
+                  @subst_cons c a (π \dot f) (π \dot f').
 Proof. by rewrite /subst_cons Cons_equivariant. Qed.
 
-Lemma subst_bcons_equiv (π : {finperm atom}) c y l l' :
+Lemma subst_bcons_equiv (π : {finperm atom}) c y a f f' :
     [disjoint finsupp π & Supp] -> 
-    π \dot subst_bcons c y l l' = 
-    subst_bcons c (π y) (π \dot l) (π \dot l').    
-Proof. by rewrite /subst_bcons BinderCons_equivariant. Qed.
+    π \dot @subst_bcons c y a f f' = 
+    @subst_bcons c (π y) a (π \dot f) (π \dot f').    
+Proof. by rewrite /subst_bcons BCons_equivariant. Qed.
 
-Lemma FCB y c l l' : y # Supp -> y # (subst_bcons c y l l').
+Lemma FCB y c a f f' : y # Supp -> y # (@subst_bcons c y a f f').
 Proof. rewrite/subst_bcons => ?. exact/bname_fresh. Qed.
 
 Lemma subst_VarE y : subst (Var y) = if x == y then t else Var y.
 Proof. by rewrite /subst W_rect_VarE /subst_var. Qed.
 
-Lemma subst_AnnotE a : subst (Annot a) = Annot a.
-Proof. by rewrite /subst W_rect_AnnotE /subst_annot. Qed.
-
-Lemma subst_ConsE c l : subst (Cons c l) = Cons c (map subst l).
+Lemma subst_ConsE c a f : subst (@Cons c a f) = @Cons c a (subst \o f).
 Proof. by rewrite /subst W_rect_ConsE /subst_cons. Qed.
 
-Lemma subst_BConsE c y l : 
+Lemma subst_BConsE c y a f : 
   y # x -> y # t -> 
-  subst (BinderCons c y l) = BinderCons c y (map subst l).
+  subst (@BCons c y a f) = @BCons c y a (subst \o f).
 Proof.
 move => yFx yFt.
-apply W_rect_BinderConsE.
+apply W_rect_BConsE.
   - exact/subst_var_equiv.
-  - exact/subst_annot_equiv.
   - exact/subst_cons_equiv.
   - exact/subst_bcons_equiv.
   - exact/FCB.
