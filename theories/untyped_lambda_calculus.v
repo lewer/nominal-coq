@@ -44,44 +44,103 @@ Definition bcons_arity c := match c with |lam => 1%nat end.
 
 Definition term := W cons_annot cons_arity bcons_annot bcons_arity.
 
-Variable x : 'I_2.
-Goal True.
-elim: x.
-
 Definition Var := Var cons_annot cons_arity bcons_annot bcons_arity : atom -> term.
 
-Definition App_subproof (t1 t2 : term) (i : 'I_2) : term.
-case: i. case. 
-  exact (fun _ => t1). 
-case.
-  exact (fun _ => t2).
-done.
-Defined.
+Definition one_to_I1 (t : term) (i : 'I_1) := t.
+Definition I1_to_one (f : 'I_1 -> term) := f (inord 0).
 
-Definition Lam_subproof (t : term) (i : 'I_1) : term. 
-case: i. case.
-  exact (fun _ => t).
-done.
-Defined.
+Lemma one_to_I1K : cancel I1_to_one one_to_I1.
+Proof.
+move => f.
+rewrite /one_to_I1/I1_to_one.
+apply/funext => i. case: i. case => // i. 
+congr f.
+case: (inord 0); move => [|m] // i0.
+congr Ordinal. exact/bool_irrelevance.
+Qed.
+
+Definition two_to_I2 (t1 t2 : term) (i : 'I_2) : term :=
+  match (i : nat) with
+    |0 => t1
+    |1%nat => t2
+    |_ => t1
+  end.
+
+Lemma two_to_I2K f : two_to_I2 (f (inord 0))  (f (inord 1)) = f.
+Proof.
+rewrite/two_to_I2.
+apply/funext => i /=.
+case_eq (i : nat).
+  move => i0. congr f. apply ord_inj. 
+  by rewrite i0 inordK. 
+case.
+  move => i1. congr f. apply ord_inj.
+  by rewrite i1 inordK.
+move => n in2. 
+have H := (leq_ord i). by rewrite in2 in H. 
+Qed.
+
+Lemma two_to_I2_comp (t1 t2 : term) f : 
+  f \o (two_to_I2 t1 t2) = two_to_I2 (f t1) (f t2).
+Proof.
+apply/funext => i /=.
+rewrite/two_to_I2.
+destruct (nat_of_ord i) => //.
+by destruct n.
+Qed.
 
 (* comment on définit une fonction 'I_n -> X ? *)
 
 Definition App t1 t2 := @Cons cons_label_eqType bcons_label_eqType 
                         cons_annot cons_arity bcons_annot bcons_arity app tt
-                        (App_subproof t1 t2).
+                        (two_to_I2 t1 t2).
 
 Definition Lam x t := @BCons cons_label_eqType bcons_label_eqType
                              cons_annot cons_arity bcons_annot bcons_arity lam x tt
-                             (Lam_subproof t).
-                           
+                             (one_to_I1 t).
+
+Lemma term_ind {env : nominalType atom} (C : env) (P : term -> Prop) :
+  (forall x, P (Var x)) ->
+  (forall t1 t2, P t1 -> P t2 -> P (App t1 t2)) ->
+  (forall x t, x # C -> P t -> P (Lam x t)) ->
+  forall u, P u.
+Proof.
+rewrite/App/Lam => HVar HApp HLam u.
+apply/(@W_ind _ _ _ _ _ _ env C P) => [|[][] f Hf|[] x [] f xFC Hf].
+  - exact/HVar.
+  - rewrite -[f]two_to_I2K. exact/HApp/Hf.
+  - rewrite -[f]one_to_I1K. apply/HLam => //.
+    exact/Hf.
+Qed.
+
+Definition term_subst x (t : term) (u : term) := wsubst x t u : term. 
+
+Notation " t { x := u } " := (term_subst x u t) (at level 0).
+
+Lemma subst_varE x y u : (Var y){x := u} = if x == y then u else (Var y).
+Proof. exact/wsubst_VarE. Qed.
+
+Lemma subst_appE t1 t2 x u : 
+  (App t1 t2){x := u} = App t1{x:=u} t2{x:=u}.
+Proof.
+by rewrite/App/term_subst wsubst_ConsE two_to_I2_comp.
+Qed.
+
+Lemma subst_lamE x y t u :
+  y # x -> y # u -> (Lam y t){x := u} = Lam y (t{x := u}).
+Proof.
+move => yFx yFt.
+by rewrite/Lam/term_subst wsubst_BConsE.
+Qed.
+
 Lemma forget x u t : x # u -> u{x := t} = u.
 Proof.
 
 (* induction sur u, en précisant que dans le cas Lambda y v, *)
 (* on veut y # (x, t) *) 
 
-elim/(@term_altind _ (x, t)): u => [y |t1 t2 IHt1 IHt2|y v yFxt IHt].
-  - move/fresh_varP => /negPf x_neq_y. by rewrite subst_VarE x_neq_y.
+elim/(@term_ind _ (x, t)): u => [y |t1 t2 IHt1 IHt2|y v yFxt IHt].
+  - by rewrite subst_varE => /fresh_Var/fresh_atomP/negPf ->. 
   - move/fresh_app => [xFt1 xFt2]. 
     rewrite subst_AppE. by rewrite IHt1 // IHt2 //.
   - have xFy : x # y. by admit.

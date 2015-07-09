@@ -589,15 +589,13 @@ freshTacCtxt z.
 apply/H. by repeat (apply/fresh_prod; split).
 Qed.
 
-(* Lemma fresh_Var x y : x # (Var y) <-> x # y. *)
-(* Proof. *)
-(* split => [[S] [xNS S_supp_Ly]|xFy]. *)
-(*   exists S; split => // π HS. *)
-(*   apply Var_inj. rewrite -Var_equivariant. *)
-(*   exact: S_supp_Ly.    *)
-(* apply (@CFN_principle (fresh_in (y, Var y))); first by freshTac. *)
-(* rewrite Var_equivariant tfinperm_fresh //; by freshTac. *)
-(* Qed. *)
+Lemma fresh_Var x y : x # (Var y) -> x # y.
+Proof.
+move => [S] [xNS S_supp_Ly].
+exists S; split => // π HS.
+apply Var_inj. rewrite -Var_equivariant.
+exact: S_supp_Ly.
+Qed.
 
 (* Lemma fresh_Cons x c a f : x # (@Cons c a f) -> x # a. *)
 (* Proof. *)
@@ -915,67 +913,66 @@ End EliminationPrinciples.
 
 Section Substitution.
 
-Context (x : atom) (t : W) (dflt := Var 0).
-Notation Supp := (x |` support t).
+Context (x : atom) (t : W).
+Local Notation dflt := (Var 0).
+Local Notation Supp := (x |` support t).
 
 (* substitution de x par t *)
 
-Definition subst_var (y : atom) :=
+Definition wsubst_var (y : atom) :=
   if x == y then t else Var y.
-Definition subst_cons (c : cons_label) a (f : 'I_(cons_arity c) -> W) res :=
+Definition wsubst_cons (c : cons_label) a (f : 'I_(cons_arity c) -> W) res :=
   @Cons c a res.
-Definition subst_bcons (c : bcons_label) (y : atom) a
+Definition wsubst_bcons (c : bcons_label) (y : atom) a
            (f : 'I_(bcons_arity c) -> W) res :=
   @BCons c y a res.
 
-Definition subst := 
-  @W_rect _ subst_var subst_cons subst_bcons Supp dflt.
+Definition wsubst := 
+  @W_rect _ wsubst_var wsubst_cons wsubst_bcons Supp dflt.
 
-Lemma subst_var_equiv (π : {finperm atom}) y : 
+Lemma wsubst_var_equiv (π : {finperm atom}) y : 
   [disjoint finsupp π & Supp] -> 
-  π \dot subst_var y = subst_var (π y). 
+  π \dot wsubst_var y = wsubst_var (π y). 
 Proof.
 rewrite fdisjoint_sym fdisjointU1X => /andP [/finsfun_dflt pix_x disj_pi_Supp].
-rewrite /subst_var if_equivariant -{2}pix_x (inj_eq (@finperm_inj _ π)).
+rewrite /wsubst_var if_equivariant -{2}pix_x (inj_eq (@finperm_inj _ π)).
 by rewrite fresh_perm // Var_equivariant.
 Qed.
   
-Lemma subst_cons_equiv (π : {finperm atom}) c a f f' :
+Lemma wsubst_cons_equiv (π : {finperm atom}) c a f f' :
     [disjoint finsupp π & Supp] ->
-                  π \dot @subst_cons c a f f' = 
-                  @subst_cons c a (π \dot f) (π \dot f').
-Proof. by rewrite /subst_cons Cons_equivariant. Qed.
+                  π \dot @wsubst_cons c a f f' = 
+                  @wsubst_cons c a (π \dot f) (π \dot f').
+Proof. by rewrite /wsubst_cons Cons_equivariant. Qed.
 
-Lemma subst_bcons_equiv (π : {finperm atom}) c y a f f' :
+Lemma wsubst_bcons_equiv (π : {finperm atom}) c y a f f' :
     [disjoint finsupp π & Supp] -> 
-    π \dot @subst_bcons c y a f f' = 
-    @subst_bcons c (π y) a (π \dot f) (π \dot f').    
-Proof. by rewrite /subst_bcons BCons_equivariant. Qed.
+    π \dot @wsubst_bcons c y a f f' = 
+    @wsubst_bcons c (π y) a (π \dot f) (π \dot f').    
+Proof. by rewrite /wsubst_bcons BCons_equivariant. Qed.
 
-Lemma FCB y c a f f' : y # Supp -> y # (@subst_bcons c y a f f').
-Proof. rewrite/subst_bcons => ?. exact/bname_fresh. Qed.
+Lemma FCB y c a f f' : y # Supp -> y # (@wsubst_bcons c y a f f').
+Proof. rewrite/wsubst_bcons => ?. exact/bname_fresh. Qed.
 
-Lemma subst_VarE y : subst (Var y) = if x == y then t else Var y.
-Proof. by rewrite /subst W_rect_VarE /subst_var. Qed.
+Lemma wsubst_VarE y : wsubst (Var y) = if x == y then t else Var y.
+Proof. by rewrite /wsubst W_rect_VarE /wsubst_var. Qed.
 
-Lemma subst_ConsE c a f : subst (@Cons c a f) = @Cons c a (subst \o f).
-Proof. by rewrite /subst W_rect_ConsE /subst_cons. Qed.
+Lemma wsubst_ConsE c a f : wsubst (@Cons c a f) = @Cons c a (wsubst \o f).
+Proof. by rewrite /wsubst W_rect_ConsE /wsubst_cons. Qed.
 
-Lemma subst_BConsE c y a f : 
+Lemma wsubst_BConsE c y a f : 
   y # x -> y # t -> 
-  subst (@BCons c y a f) = @BCons c y a (subst \o f).
+  wsubst (@BCons c y a f) = @BCons c y a (wsubst \o f).
 Proof.
 move => yFx yFt.
 apply W_rect_BConsE.
-  - exact/subst_var_equiv.
-  - exact/subst_cons_equiv.
-  - exact/subst_bcons_equiv.
+  - exact/wsubst_var_equiv.
+  - exact/wsubst_cons_equiv.
+  - exact/wsubst_bcons_equiv.
   - exact/FCB.
 (* remplacer Supp -> env *)
 Admitted.
 
 End Substitution.
-
-Notation " t { x := u } " := (subst x u t) (at level 0).
 
 End W.
