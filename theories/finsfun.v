@@ -1,6 +1,6 @@
-From Ssreflect 
+From mathcomp
 Require Import ssreflect ssrbool ssrnat eqtype ssrfun seq choice fintype.
-From MathComp
+From mathcomp
 Require Import path finset finfun bigop.
 Require Import finmap.
 

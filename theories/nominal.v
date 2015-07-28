@@ -1,7 +1,7 @@
-From Ssreflect
+From mathcomp
 Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
 
-From MathComp
+From mathcomp
 Require Import bigop  finfun finset generic_quotient perm tuple fingroup.
 
 Require Import finmap finsfun finperm utilitaires.
@@ -16,67 +16,97 @@ Local Open Scope fset.
 Local Open Scope quotient_scope.
 
 Import Key.Exports.
-  
-Definition atom := nat_KeyType.
-Definition atom_type := keyType.
+
+Definition atom := nat.
 
 Axiom funext : forall {X : Type} {I : finType} (f g : I -> X),
                  f =1 g -> f = g.
 
 Section NominalDef.
 
-Record perm_setoid_mixin (X : Type) (R : X -> X -> Prop) (A : atom_type)
-  := PermSetoidMixin {
-  act : {finperm A } -> X -> X;
-  _ : forall x, R ((act (1 A)) x) x;
-  _ : forall π π' x, R (act (π * π') x) (act π (act π' x));
-  _ : forall x y π, R x y -> R (act π x) (act π y)
+Variable A : keyType.
+
+Record perm_setoid_mixin_of (X : Type) (R : X -> X -> Prop) :=
+  PermSetoidMixin {
+  act_op : {finperm A} -> X -> X;
+  _ : forall x, R ((act_op 1) x) x;
+  _ : forall π π' x, R (act_op (π * π') x) (act_op π (act_op π' x));
+  _ : forall x y π, R x y -> R (act_op π x) (act_op π y)
 }.
 
-Record nominal_mixin (X : choiceType) (A : atom_type) := NominalMixin {
-  perm_setoid_of : @perm_setoid_mixin X (@eq X) A;
-  supp : X -> {fset A}; 
-  _ : forall (π : {finperm A}) x, 
-        (forall a : A, a \in supp x -> π a = a) -> (act perm_setoid_of π x) = x
+Record nominal_mixin_of (X : Type) := NominalMixin {
+  perm_setoid_mixin :> @perm_setoid_mixin_of X (@eq X);
+  support_op : X -> {fset A};
+  _ : forall (π : {finperm A}) x,
+        (forall a : A, a \in support_op x -> π a = a) ->
+        (act_op perm_setoid_mixin π x) = x
 }.
-                                    
-Record nominalType (A : atom_type) := NominalType {
-                           car :> choiceType;
-                           nominal_mix : nominal_mixin car A}.
 
-Definition actN A (nt : nominalType A) := act (perm_setoid_of (nominal_mix nt)).
+Record nominal_class_of (X : Type) := NominalClass {
+  nominal_choice_mixin :> @Choice.class_of X;
+  nominal_mixin :> @nominal_mixin_of X
+}.
+
+Structure nominalType (phA : phant A) := NominalPack {
+  nominal_sort :> Type;
+  nominal_class : nominal_class_of nominal_sort;
+  _ : Type
+}.
+Local Notation "{nominalType}" := (nominalType (Phant A)).
+
+Variables (T : Type) (cT : {nominalType}).
+
+Definition act := act_op (nominal_class cT).
+Definition support := support_op (nominal_class cT).
+
+Definition nominal_pack (phA : phant A) m :=
+  fun bT b & phant_id (Choice.class bT) b =>
+  @NominalPack phA T (@NominalClass T b m) T.
+
+Definition nominal_clone c of phant_id nominal_class c :=
+  @NominalPack (Phant A) T c T.
+Let nominal_xT := let: NominalPack T _ _ := cT in T.
+Notation nominal_xclass := (@nominal_class (Phant A) cT : nominal_class_of nominal_xT).
+
+Canonical nominal_eqType := @Equality.Pack cT nominal_xclass nominal_xT.
+Canonical nominal_choiceType := @Choice.Pack cT nominal_xclass nominal_xT.
 
 End NominalDef.
 
-Notation "π \dot x" := (@actN _ _ π x)
+Coercion nominal_eqType : nominalType >-> Equality.type.
+Coercion nominal_choiceType : nominalType >-> Choice.type.
+
+Notation NominalType A T m := (@nominal_pack _ T (Phant A) m _ _ id).
+Notation "{nominalType  A }" := (@nominalType _ (Phant A)).
+
+Notation "π \dot x" := (@act _ _ π x)
                          (x at level 60, at level 60).
 Notation swap := tfinperm.
 
 Section BasicNominalTheory.
 
-Variables (A : atom_type) (W X Y Z : nominalType A).
+Variables (A : keyType) (W X Y Z : {nominalType A}).
 Implicit Types (π : {finperm A}) (x : X).
 
-Local Notation act π := (@actN A X π).
-Local Notation support := (supp (nominal_mix X)).
+Local Notation actX := (@act A X).
 
-Lemma act1 : act (1 A) =1 id.
-Proof. by case: X => car; case; case. Qed.
+Lemma act1 : actX 1 =1 id.
+Proof. by case: X => ? [? [[]]]. Qed.
 
 Lemma actM (π1 π2 : {finperm A}) : forall x : X,  (π1 * π2) \dot x = π1 \dot (π2 \dot x).
-Proof. by case: X => car; case; case. Qed.
+Proof. by case: X => ? [? [[]]]. Qed.
 
-Lemma act_id π : forall x : X, (forall a : A, a \in support x -> π a = a) 
+Lemma act_id : forall π (x : X), (forall a : A, a \in support x -> π a = a)
                    -> (act π x) = x.
-Proof. case: X => car. case => ps supp. exact. Qed.
+Proof. by case: X => ? [? []]. Qed.
 
-Lemma actK π : cancel (act π) (act π^-1).
+Lemma actK π : cancel (actX π) (actX π^-1).
 Proof. by move => x; rewrite -actM (finperm_invP π) act1. Qed.
 
-Lemma actVK π : cancel (act π^-1) (act π).
+Lemma actVK π : cancel (actX π^-1) (actX π).
 Proof. by move => x; rewrite -actM (finperm_invVP π) act1. Qed.
 
-Lemma act_inj π : injective (act π).
+Lemma act_inj π : injective (actX π).
 Proof. by move => x y /(congr1 (act π^-1)); rewrite !actK. Qed.
 
 Lemma act_conj π a b x : π \dot (swap a b) \dot x = swap (π a) (π b) \dot π \dot x.
@@ -90,15 +120,13 @@ Proof. by rewrite -!actM tfinperm_conj_imR. Qed.
 
 End BasicNominalTheory.
 
-Definition support A (nt : nominalType A) x := supp (nominal_mix nt) x.
-
 Section NominalTrivial.
 
-Variables (A : atom_type) (X : choiceType).
-  
+Variables (A : keyType) (X : choiceType).
+
 Definition trivialact (π : {finperm A}) (x : X) := x.
 
-Lemma trivialact1 : forall x, trivialact (1 A) x = x.
+Lemma trivialact1 : forall x, trivialact 1 x = x.
 Proof. by []. Qed.
 
 Lemma trivialactM π π' x : trivialact (π * π') x = trivialact π (trivialact π' x).
@@ -108,30 +136,68 @@ Lemma trivialactproper x y π : x = y -> (trivialact π x) = (trivialact π y).
 Proof.  by move ->. Qed.
 
 Definition trivial_nominal_setoid_mixin :=
-  @PermSetoidMixin X (@eq X) A trivialact trivialact1 trivialactM trivialactproper.
+  @PermSetoidMixin A X (@eq X) trivialact trivialact1 trivialactM trivialactproper.
 
 Lemma trivialact_id (π : {finperm A})  x :
   (forall a, a \in fset0 -> π a = a) -> trivialact π x = x.
 Proof. by []. Qed.
 
-Canonical trivial_nominal_mixin :=
-  @NominalMixin X A trivial_nominal_setoid_mixin _ trivialact_id.
+Definition trivial_nominal_mixin :=
+  @NominalMixin A X trivial_nominal_setoid_mixin _ trivialact_id.
 
-Canonical trivial_nominal_type :=
-  NominalType trivial_nominal_mixin.
+Definition trivial_nominal_type :=
+  NominalType A X trivial_nominal_mixin.
 
 Lemma trivialactE π x : trivialact π x = x.
 Proof. by []. Qed.
 
 End NominalTrivial.
 
+Canonical bool_nominalType (A : keyType) :=
+  NominalType A bool (@trivial_nominal_mixin A [choiceType of bool]).
+
+Section NominalOpt.
+
+Variables (A : keyType) (X : {nominalType A}).
+
+Definition optact (π : {finperm A}) (x : option X) := omap (act π) x.
+
+Lemma optact1 x : optact 1 x = x.
+Proof. by case: x => //= a; rewrite act1. Qed.
+
+Lemma optactM π π' x : optact (π * π') x = optact π (optact π' x).
+Proof. by case: x => //= a; rewrite actM. Qed.
+
+Lemma optactproper x y π : x = y -> (optact π x) = (optact π y).
+Proof. by move ->. Qed.
+
+Definition opt_nominal_setoid_mixin :=
+  @PermSetoidMixin A (option X) (@eq _) optact optact1 optactM optactproper.
+
+Definition opt_support (o : option X) :=
+  if o is Some a then support a else fset0.
+
+Lemma optact_id (π : {finperm A}) x :
+  (forall a, a \in opt_support x -> π a = a) -> optact π x = x.
+Proof. by case: x => //= a act_pi; rewrite act_id. Qed.
+
+Canonical opt_nominal_mixin :=
+  @NominalMixin A (option X) opt_nominal_setoid_mixin _ optact_id.
+
+Canonical opt_nominal_type := NominalType A (option X) opt_nominal_mixin.
+
+Lemma optactE π x : optact π (Some x) = Some (π \dot x).
+Proof. by []. Qed.
+
+End NominalOpt.
+
 Section NominalList.
 
-Variables (A : atom_type) (X : nominalType A).
+Variables (A : keyType) (X : {nominalType A}).
 
-Definition listact π (l : seq X) := map (@actN _ X π) l.
+Definition listact π (l : seq X) := map (act π) l.
 
-Lemma listact1 l : listact (1 A) l = l.
+Lemma listact1 l : listact 1 l = l.
 Proof.
 elim: l => //= a l IHl. by rewrite act1 IHl.
 Qed.
@@ -139,19 +205,19 @@ Qed.
 Lemma listactM π π' l : listact (π * π') l = listact π (listact π' l).
 Proof.
 elim: l => //= a l IHl. by rewrite actM IHl.
-Qed.  
+Qed.
 
 Lemma listactproper l1 l2 π : l1 = l2 -> listact π l1 = listact π l2.
 Proof. by move ->. Qed.
 
-Definition list_nominal_setoid_mixin := 
-  @PermSetoidMixin (seq X) (@eq (seq X)) A listact listact1 listactM listactproper.   
+Definition list_nominal_setoid_mixin :=
+  @PermSetoidMixin A (seq X) (@eq (seq X)) listact listact1 listactM listactproper.
 
 Definition list_support (l : seq X) := fsetU_list [seq support x | x <- l].
 
 Lemma listact_id (π : {finperm A}) l :
   (forall a, a \in list_support l -> π a = a) -> listact π l = l.
-Proof. 
+Proof.
 elim: l => //= x l IHl Hal.
 rewrite IHl => [|a a_supp_l].
   rewrite act_id //= => a a_supp_x.
@@ -159,16 +225,15 @@ rewrite IHl => [|a a_supp_l].
 apply Hal. by rewrite /list_support /= in_fsetU a_supp_l orbT.
 Qed.
 
-Canonical list_nominal_mixin :=
-  @NominalMixin _ A list_nominal_setoid_mixin _ listact_id.
+Definition list_nominal_mixin :=
+  @NominalMixin A _ list_nominal_setoid_mixin _ listact_id.
 
-Canonical list_nominal_type :=
-  NominalType list_nominal_mixin.
+Canonical list_nominal_type := NominalType A (seq X) list_nominal_mixin.
 
 Lemma listactE π (l : seq X) : π \dot l = [seq π \dot x | x <- l].
 Proof. by []. Qed.
 
-Lemma cons_support (l : seq X) (x : X) : 
+Lemma cons_support (l : seq X) (x : X) :
   list_support (x :: l) = (support x) `|` (list_support l).
 Proof. by []. Qed.
 
@@ -184,12 +249,12 @@ End NominalList.
 
 Section NominalProd.
 
-Variables (A : atom_type) (X Y : nominalType A).
+Variables (A : keyType) (X Y : {nominalType A}).
 Implicit Type (x : X * Y).
 
 Definition prodact π x := (π \dot x.1, π \dot x.2).
 
-Lemma prodact1 : forall x, prodact (1 A) x = x.
+Lemma prodact1 : forall x, prodact 1 x = x.
 Proof. by case => x y; rewrite /prodact !act1. Qed.
 
 Lemma prodactM π π' : forall x, prodact (π * π') x = prodact π (prodact π' x).
@@ -198,21 +263,21 @@ Proof. by case => x y /=; rewrite /prodact !actM. Qed.
 Lemma prodactproper : forall x y π, x = y -> (prodact π x) = (prodact π y).
 Proof. by move => x y π ->. Qed.
 
-Definition prod_nominal_setoid_mixin := 
-  @PermSetoidMixin (X * Y) (@eq (X * Y)) A prodact prodact1 prodactM prodactproper.   
+Definition prod_nominal_setoid_mixin :=
+  @PermSetoidMixin A (X * Y) (@eq (X * Y)) prodact prodact1 prodactM prodactproper.
 
 Lemma prodact_id (π : {finperm A}) x :
      (forall a, a \in (support x.1 `|` support x.2) -> π a = a) -> prodact π x = x.
-Proof. 
+Proof.
 case: x => x y Hsupp. rewrite /prodact !act_id //= => a asupp; apply Hsupp;
 rewrite in_fsetU asupp ?orbT //.
 Qed.
 
-Canonical prod_nominal_mixin :=
-  @NominalMixin _ A prod_nominal_setoid_mixin _ prodact_id.
+Definition prod_nominal_mixin :=
+  @NominalMixin A _ prod_nominal_setoid_mixin _ prodact_id.
 
 Canonical prod_nominal_type :=
-  NominalType prod_nominal_mixin.
+  NominalType A (X * Y) prod_nominal_mixin.
 
 Lemma prodactE π (y : X) (z : Y) : π \dot (y, z) = (π \dot y, π \dot z).
 Proof. by []. Qed.
@@ -230,7 +295,7 @@ Implicit Types (π : {finperm atom}) (a : atom).
 
 Definition atomact π a := π a.
 
-Lemma atomact1 : forall (a : atom), atomact (1 atom) a = a.
+Lemma atomact1 : forall (a : atom), atomact 1 a = a.
 Proof. by move => a /=; rewrite /atomact finsfun1. Qed.
 
 Lemma atomactM : forall π π' a, atomact (π * π') a = atomact π (atomact π' a).
@@ -239,8 +304,8 @@ Proof. by move => π π' a /=; rewrite /atomact finsfunM. Qed.
 Lemma atomactproper : forall x y π, x = y -> (atomact π x) = (atomact π y).
 Proof. by move => x y π ->. Qed.
 
-Definition atom_nominal_setoid_mixin := 
-  @PermSetoidMixin _ (@eq atom) atom atomact atomact1 atomactM atomactproper.   
+Definition atom_nominal_setoid_mixin :=
+  @PermSetoidMixin _ atom (@eq atom) atomact atomact1 atomactM atomactproper.
 
 Lemma atomact_id π a :
      (forall b, b \in fset1 a -> atomact π b = b) -> atomact π a = a.
@@ -250,17 +315,16 @@ Lemma strong_atomactsupport π a :
   atomact π a = a -> (forall b, b \in fset1 a -> atomact π b = b).
 Proof. move => /= πa_eq_a b. by rewrite in_fset1 => /eqP ->. Qed.
 
-Canonical atom_nominal_mixin :=
+Definition atom_nominal_mixin :=
   @NominalMixin _ atom atom_nominal_setoid_mixin _ atomact_id.
 
-Canonical atom_nominal_type :=
-  @NominalType atom nat_choiceType atom_nominal_mixin.
+Canonical atom_nominal_type := NominalType atom atom atom_nominal_mixin.
 
-Lemma swapL a b : (swap a b) \dot a = b. 
-Proof. by rewrite /actN /= /atomact tfinpermL. Qed.
+Lemma swapL (a b : atom) : (swap a b) \dot a = b.
+Proof. by rewrite /act /= /atomact tfinpermL. Qed.
 
-Lemma swapR a b : (swap a b) \dot b = a.
-Proof. by rewrite /actN /= /atomact tfinpermR. Qed.
+Lemma swapR (a b : atom) : (swap a b) \dot b = a.
+Proof. by rewrite /act /= /atomact tfinpermR. Qed.
 
 Lemma atomactE π a : π \dot a = π a.
 Proof. by []. Qed.
@@ -271,10 +335,10 @@ Section NominalAtomSubsets.
 
 Implicit Types (π : {finperm atom}) (A : {fset atom}).
 
-Definition ssatomact π A := im π A. 
+Definition ssatomact π A := im π A.
 
-Lemma ssatomact1 : forall A, ssatomact (1 atom) A = A.
-Proof. 
+Lemma ssatomact1 : forall A, ssatomact 1 A = A.
+Proof.
 move => A /=; rewrite -{2}[A](im_id A). apply im_eq1 => a.
 by rewrite finsfun1.
 Qed.
@@ -286,11 +350,11 @@ by rewrite finsfunM.
 Qed.
 
 Lemma ssatomactproper : forall A B π, A = B -> (ssatomact π A) = (ssatomact π B).
-Proof. by move => A B π ->. Qed. 
+Proof. by move => A B π ->. Qed.
 
 Lemma ssatomact_id π A :
   (forall b, b \in A -> π b = b) -> ssatomact π A = A.
-Proof. 
+Proof.
 move => Asupp /=; apply/fsetP => a; apply/imfsetP/idP => [[b bA]->|aA].
   rewrite Asupp; exact: valP.
 exists (FSetSub aA) => //. by rewrite Asupp.
@@ -302,46 +366,46 @@ Definition code (A : {fset atom}) := fset_keys A.
 Definition decode (s : seq atom) := seq_fset s.
 
 Lemma fset_codeK : cancel code decode.
-Proof. 
+Proof.
 Admitted.
 
 
 Definition finSet_ChoiceMixin := CanChoiceMixin fset_codeK.
 Canonical finset_choiceType := Eval hnf in ChoiceType {fset atom} finSet_ChoiceMixin.
 
-Definition ssatom_nominal_setoid_mixin := 
-  @PermSetoidMixin {fset atom} (@eq {fset atom}) atom ssatomact ssatomact1 ssatomactM ssatomactproper. 
+Definition ssatom_nominal_setoid_mixin :=
+  @PermSetoidMixin _ {fset atom} (@eq {fset atom}) ssatomact ssatomact1 ssatomactM ssatomactproper.
 
-Canonical ssatom_nominal_mixin :=
-  @NominalMixin finset_choiceType atom ssatom_nominal_setoid_mixin _ ssatomact_id.
+Definition ssatom_nominal_mixin :=
+  @NominalMixin _ {fset atom} ssatom_nominal_setoid_mixin _ ssatomact_id.
 
 Canonical ssatom_nominal_type :=
-  @NominalType atom finset_choiceType ssatom_nominal_mixin. 
+  @NominalType atom {fset atom} ssatom_nominal_mixin.
 
 Lemma mem_imperm π A (a : atom) : (π a \in π \dot A) = (a \in A).
 Proof. by apply/mem_im/finperm_inj. Qed.
 
-End NominalAtomSubsets. 
+End NominalAtomSubsets.
 
 Section Nominalffun.
 
 (* ATtention, il ne s'agit pas des ffun de ssreflect, mais des
 fonctions d'un type fini dans un nominalType *)
 
-Context (X : nominalType atom) (I : finType).
+Context (X : {nominalType atom}) (I : finType).
 
 Definition ffunact π (f : I -> X) i := π \dot f i.
 
-Lemma ffunact1 : ffunact (1 atom) =1 id.
+Lemma ffunact1 : ffunact 1 =1 id.
 Proof.
 move => f /=.
-apply/funext => i. 
+apply/funext => i.
 by rewrite /ffunact act1.
 Qed.
 
 Lemma ffunactM : forall π π' f, ffunact (π * π') f = ffunact π (ffunact π' f).
 Proof.
-move => π π' f /=. 
+move => π π' f /=.
 apply/funext => i.
 by rewrite /ffunact actM.
 Qed.
@@ -358,12 +422,11 @@ rewrite /ffunact. apply/act_id => a a_supp_fi.
 apply/fsupp/fbigcupP. by exists i.
 Qed.
 
-Definition code_ffun : (I -> X) -> GenTree.tree nat. Admitted.
-Definition decode_ffun : GenTree.tree nat -> (I-> X). Admitted.
+Definition code_ffun (f : I -> X) : {ffun I -> X} := [ffun x => f x].
+Definition decode_ffun (f : {ffun I -> X}) x : X := f x.
 
 Lemma ffun_codeK : cancel code_ffun decode_ffun.
-Proof.
-Admitted.
+Proof. by move=> f; apply/funext => x; rewrite /decode_ffun ffunE. Qed.
 
 (* rewrite/code_ffun/decode_ffun => f. *)
 (* apply/funext => i.  *)
@@ -374,18 +437,18 @@ Definition ffun_EqMixin := CanEqMixin ffun_codeK.
 Canonical ffun_eqType := Eval hnf in EqType (I -> X) ffun_EqMixin.
 
 Definition ffun_ChoiceMixin := CanChoiceMixin ffun_codeK.
-Canonical ffun_choiceType := Eval hnf in ChoiceType _ ffun_ChoiceMixin.
+Canonical ffun_choiceType := Eval hnf in ChoiceType (I -> X) ffun_ChoiceMixin.
 (* bizarre : si j'écris ChoiceType ffun_eqType ffun_ChoiceMixin, *)
 (* j'ai des problèmes plus loin avec /eqP ... *)
 
 Definition ffun_nominal_setoid_mixin :=
-  @PermSetoidMixin _ (@eq (I -> X)) atom ffunact ffunact1 ffunactM ffunactproper.
+  @PermSetoidMixin _ _ (@eq (I -> X)) ffunact ffunact1 ffunactM ffunactproper.
 
-Canonical ffun_nominal_mixin :=
-  @NominalMixin ffun_choiceType atom ffun_nominal_setoid_mixin _ ffunact_id.
+Definition ffun_nominal_mixin :=
+  @NominalMixin _ (I -> X) ffun_nominal_setoid_mixin _ ffunact_id.
 
 Canonical ffun_nominal_type :=
-  @NominalType atom ffun_choiceType ffun_nominal_mixin.
+  NominalType atom (I -> X) ffun_nominal_mixin.
 
 Lemma ffunactE π (f : I -> X) i : (π \dot f) i = π \dot f i.
 Proof. by []. Qed.
@@ -394,19 +457,19 @@ End Nominalffun.
 
 Section Freshness.
 
-Implicit Types (X Y: nominalType atom).
+Implicit Types (X Y: {nominalType atom}).
 
-Definition max (A : {fset atom}) := \max_(a : A) val a. 
+Definition max (A : {fset atom}) := \max_(a : A) val a.
 
-Definition fresh_in X (x : X) := (max (support x)).+1. 
+Definition fresh_in X (x : X) : atom := (max (support x)).+1.
 
-Definition supports X (A : {fset atom}) (x : X) := 
+Definition supports X (A : {fset atom}) (x : X) :=
   forall (π : {finperm atom}), (forall a : atom, a \in A -> π a = a) -> π \dot x = x.
 
-Lemma supportsP (X : nominalType atom) (x : X) :
+Lemma supportsP (X : {nominalType atom}) (x : X) :
   supports (support x) x.
 Proof.
-move => π. 
+move => π.
 exact: act_id.
 Qed.
 
@@ -426,10 +489,10 @@ Qed.
 Lemma fresh_neq_in (A : {fset atom}) a : a \in A -> a != fresh_in A.
 Proof. apply contraL => /eqP ->. exact: fresh_notin. Qed.
 
-Lemma fresh_neq x : x != fresh_in x.
+Lemma fresh_neq (x : atom) : x != fresh_in x.
 Proof. rewrite/fresh_in/support/=.
 Admitted.
-       
+
 Lemma supports_fsetP (A B  : {fset atom}) : reflect (supports A B) (B `<=` A).
 Proof.
 apply: (iffP idP) =>[/fsubsetP B_sub_A π fix_A|A_supp_B].
@@ -447,15 +510,15 @@ have : fresh_in (A, B) \in A `|` B.
 by move/fresh_neq_in/eqP.
 Qed.
 
-Lemma supportsI (X : nominalType atom) (A B : {fset atom}) (x : X) : 
-  supports A x -> supports B x -> supports (A `&` B) x. 
+Lemma supportsI (X : {nominalType atom}) (A B : {fset atom}) (x : X) :
+  supports A x -> supports B x -> supports (A `&` B) x.
 Proof.
-(* suppose le théorème de décomposition des permutations en 
+(* suppose le théorème de décomposition des permutations en
    produit de transpositions *)
 Admitted.
 
 
-Definition fresh X a (x : X) := exists (S : {fset atom}), a \notin S /\ supports S x. 
+Definition fresh X a (x : X) := exists (S : {fset atom}), a \notin S /\ supports S x.
 
 Notation "a # x" := (fresh a x) (x at level 60, at level 60).
 
@@ -467,30 +530,30 @@ split.
 exact: supportsP.
 Qed.
 
-Lemma fresh_equiv (X : nominalType atom) (x : X) a (π : {finperm atom}) : 
-  (a # x) <-> (π a) # (π \dot x). 
+Lemma fresh_equiv (X : {nominalType atom}) (x : X) a (π : {finperm atom}) :
+  (a # x) <-> (π a) # (π \dot x).
 Proof.
-wlog suff : x π a / a # x -> (π a) # (π \dot x) => Hsuff. 
+wlog suff : x π a / a # x -> (π a) # (π \dot x) => Hsuff.
   split; first by apply Hsuff.
   rewrite -{2}[a](finpermK π) -{2}[x](actK π).
   exact: Hsuff.
 move : Hsuff => [S] [aNS supp_S_x].
 exists (π \dot S). split; first by rewrite mem_imperm.
-move => Ɣ HƔ. apply (@act_inj _ _ π^-1). rewrite actK -2?actM.  
+move => Ɣ HƔ. apply (@act_inj _ _ π^-1). rewrite actK -2?actM.
 apply supp_S_x => b bS. rewrite finsfunM /= finsfunM /= HƔ;
   first exact: finpermK.
 by rewrite mem_imperm.
 Qed.
 
-Lemma im_fresh (X : nominalType atom) (π : {finperm atom}) a (x : X) :
+Lemma im_fresh (X : {nominalType atom}) (π : {finperm atom}) a (x : X) :
   a # (π^-1 \dot x) -> (π a) # x.
 Proof. by rewrite -{2}[x](actVK π); apply fresh_equiv. Qed.
 
-Lemma im_inv_fresh (X : nominalType atom) (π : {finperm atom}) a (x : X) :
+Lemma im_inv_fresh (X : {nominalType atom}) (π : {finperm atom}) a (x : X) :
   a # (π \dot x) -> (π^-1 a) # x.
 Proof. rewrite -{2}[x](actK π). by apply fresh_equiv. Qed.
 
-Lemma CFN_principle b {X : nominalType atom} {a} {x : X} :
+Lemma CFN_principle b {X : {nominalType atom}} {a} {x : X} :
   b # x -> swap a b \dot x = x -> a # x.
 Proof.
 move => bFx abx_eq_x.
@@ -498,28 +561,28 @@ apply (@fresh_equiv _ _ _ (swap a b)).
 by rewrite tfinpermL abx_eq_x.
 Qed.
 
-Lemma fresh_atomP x y : reflect (x # y) (x != y). 
+Lemma fresh_atomP (x y : atom) : reflect (x # y) (x != y).
 Proof.
 apply: (iffP idP) => [xNy| [S] [xNS S_supp_y]].
   apply (@CFN_principle (fresh_in y)); first exact: fresh1P.
   apply/tfinpermNone/andP; split; first by rewrite eq_sym.
-  exact: fresh_neq.  
+  exact: fresh_neq.
 apply/negP => /eqP x_eq_y.
 rewrite -x_eq_y in S_supp_y.
 have : forall a, a \notin S -> a = x.
   move => a aNS. rewrite -(tfinpermR a x). apply S_supp_y => b bS.
   apply/tfinpermNone/andP; split; apply/eqP => H; subst.
     by rewrite bS in aNS.
-  by rewrite bS in xNS.  
+  by rewrite bS in xNS.
 have freshxSNS : (fresh_in (x |` S)) \notin S.
   move: (fresh_notin (support x `|` S)).
-  by rewrite in_fset1U negb_or => /andP; case. 
+  by rewrite in_fset1U negb_or => /andP; case.
 move/(_ (fresh_in (x |` S))) /(_ freshxSNS).
 move: (fresh_neq_in (fset1U1 x S)).
-by rewrite eq_sym => /eqP. 
+by rewrite eq_sym => /eqP.
 Qed.
 
-Lemma fresh_atomC x y : x # y <-> y # x.
+Lemma fresh_atomC (x y : atom) : x # y <-> y # x.
 Proof.
 split => hFresh .
 all: apply/fresh_atomP.
@@ -555,23 +618,23 @@ split => //.
 exact: supportsP.
 Qed.
 
-Lemma act_fresh {X : nominalType atom} (a b : atom) (x : X) :
+Lemma act_fresh {X : {nominalType atom}} (a b : atom) (x : X) :
       a # x -> b # x -> swap a b \dot x = x.
 Proof.
-move => [Sa [aNSa supp_Sa_x]] [Sb [bNSb supp_Sb_x]]. 
+move => [Sa [aNSa supp_Sa_x]] [Sb [bNSb supp_Sb_x]].
 have supp_SaISb_x : supports (Sa `&` Sb) x by apply: supportsI.
 apply supp_SaISb_x => c. rewrite in_fsetI => /andP [cSa cSb].
 have aNc : c != a.
   apply/negP => /eqP a_eq_c. move: cSa aNSa.
-  by rewrite a_eq_c => ->. 
+  by rewrite a_eq_c => ->.
 have bNc : c != b.
   apply/negP => /eqP b_eq_c. move: cSb bNSb.
   by rewrite b_eq_c => ->.
-apply tfinpermNone. 
+apply tfinpermNone.
 by rewrite aNc bNc.
 Qed.
 
-Lemma fresh_prod X Y a (x : X) (y : Y) : a # (x, y) <-> (a # x) /\ (a # y). 
+Lemma fresh_prod X Y a (x : X) (y : Y) : a # (x, y) <-> (a # x) /\ (a # y).
 Proof.
 split.
   move => [S] [aNS supp_S_xy].
@@ -584,7 +647,7 @@ exists (Sx `|` Sy); split.
 move => π H. rewrite prodactE.
 have -> : π \dot x = x.
   apply (supp_Sx_x π) => b bSx. apply H.
-  by rewrite in_fsetU bSx. 
+  by rewrite in_fsetU bSx.
 suff : π \dot y = y by move ->.
 apply (supp_Sy_y π) => b bSy. apply H.
   by rewrite in_fsetU bSy orbT.
@@ -596,31 +659,31 @@ exists fset0. split => //.
 by rewrite in_fset0.
 Qed.
 
-Lemma supports_cons {X} S (x : X) (l : seq X): 
+Lemma supports_cons {X} S (x : X) (l : seq X):
   supports S (x :: l) -> supports S x /\ supports S l.
 Proof.
 move => S_supp_xl.
 split => π HS.
-all: move : (S_supp_xl π HS) => /= /eqP. 
-all: by rewrite !listactE /= eqseq_cons => /andP [/eqP ? /eqP ?]. 
+all: move : (S_supp_xl π HS) => /= /eqP.
+all: by rewrite !listactE /= eqseq_cons => /andP [/eqP ? /eqP ?].
 Qed.
 
 Lemma fresh_cons {X} (l : seq X) a x : a # (x :: l) <-> a # x /\ a # l.
 Proof.
 split.
-  move => [S] [aNS /supports_cons [S_supp_x S_supp_l]]. 
-  split; by exists S; split => //. 
+  move => [S] [aNS /supports_cons [S_supp_x S_supp_l]].
+  split; by exists S; split => //.
 move => [[Sa] [aNSa Sa_supp_x] [Sl] [aNSl Sl_supp_l]].
 exists (Sa `|` Sl); split.
   by rewrite in_fsetU negb_or aNSa aNSl.
-move => π H. 
+move => π H.
 Admitted.
 
 Lemma fresh_list {X} (l : seq X) a : a # l <-> forall x, x \in l -> a # x.
-Proof. 
-elim: l => [|b l IH]. 
+Proof.
+elim: l => [|b l IH].
   split => // ?; exact/fresh_nil.
-split => [/fresh_cons [aFb aFl] y|Hbl]. 
+split => [/fresh_cons [aFb aFl] y|Hbl].
    rewrite inE => /orP. case.
     by move /eqP ->.
   exact/(iffLR IH aFl).
@@ -630,14 +693,14 @@ apply IH => x xl; apply/Hbl.
 by rewrite in_cons xl orbT.
 Qed.
 
-Lemma fresh_map {T : finType} {X : nominalType atom} (f : T -> X) a :
+Lemma fresh_map {T : finType} {X : {nominalType atom}} (f : T -> X) a :
   a # [seq f i | i : T] -> forall i, a # f i.
 Proof.
 move/fresh_list => H i.
-exact/H/map_f/mem_enum. 
+exact/H/map_f/mem_enum.
 Qed.
 
-Lemma fresh_fun {I : finType} {X} (f : I -> X) a i : 
+Lemma fresh_fun {I : finType} {X} (f : I -> X) a i :
   a # f -> a # f i.
 Proof.
 move => [S] [aNS S_supp_f].
@@ -646,15 +709,15 @@ have πf_eq_f : π \dot f = f by apply/S_supp_f.
 by rewrite -ffunactE πf_eq_f.
 Qed.
 
-Lemma fresh_perm (X : nominalType atom) (π : {finperm atom}) (x : X) : 
+Lemma fresh_perm (X : {nominalType atom}) (π : {finperm atom}) (x : X) :
   [disjoint (support x) & finsupp π] -> π \dot x = x.
 Proof.
-move => /fdisjointP disj_x_π.  
+move => /fdisjointP disj_x_π.
 apply act_id => a /disj_x_π.
 exact: finsfun_dflt.
 Qed.
 
-Lemma tfinperm_fresh a b c : a # c -> b # c -> swap a b c = c.
+Lemma tfinperm_fresh (a b c : atom) : a # c -> b # c -> swap a b c = c.
 Proof.
 move => aFc bFc.
 apply/tfinpermNone/andP; split.
@@ -677,7 +740,7 @@ apply/fdisjointP => a /(fsubsetP (finsupp_conj π' π) a).
 by rewrite in_fsetU => /orP [?|?]; auto.
 Qed.
 
-Lemma disj_im_fresh (π : {finperm atom}) T x : 
+Lemma disj_im_fresh (π : {finperm atom}) T x :
   [disjoint finsupp π & T] -> x # T -> π x # T.
 Proof.
 move => /fdisjointP disj_pi_T xFT.
@@ -687,7 +750,7 @@ have : π (π x) != π x.
   by move: pix_neq_x => /eqP.
 by rewrite -mem_finsupp => /disj_pi_T /fresh_fsetP.
 Qed.
-  
+
 End Freshness.
 
 Notation "a # x" := (fresh a x) (x at level 60, at level 60).
@@ -700,30 +763,27 @@ Ltac freshTac :=
       match goal with
         | |- fresh_in ?y  # ?x => move : (fresh1P y)
       end;
-      repeat (move/fresh_prod; case)
-  end; move => *.
-        
+      do ?[case/fresh_prod|move=> ?]
+  end.
+
 
 Ltac freshTacCtxt z :=
   match goal with
-      | [ y := fresh_in ?x |- _] => 
-        match y with
-          |z => move: (fresh1P x); rewrite -/z
-        end
+      | [ y := fresh_in ?x |- _] => match y with
+        | z => move: (fresh1P x); rewrite -/z
+                                    end
+      | _ => fail "not a fresh variable"
   end;
-  repeat 
-    (move/fresh_prod;
-     case);
-  move => *.
+  do ?[case/fresh_prod|move=> ?].
 
 Ltac freshTacList :=
   match goal with
-  | |- ?z # ?t  => 
-    match goal with 
+  | |- ?z # ?t  =>
+    match goal with
       | [ H : is_true (t \in ?l) |- _] => apply (@fresh_list _ l) => //
     end
 end.
-      
+
 
 (* fresh_dec (e : list { X : nominalType & X }) nom : is_fresh_dec x y -> is_fresh (fresh_in (interp e x)) (interp e y) *)
 (* Hint Extern 0 (@is_fresh _ _ _) => eapply fresh_in_fresh : typeclass_instances. *)
@@ -731,11 +791,11 @@ end.
 
 Section EquivariantFunctions.
 
-Implicit Types (W X Y Z: nominalType atom) (π : {finperm atom}).
+Implicit Types (W X Y Z: {nominalType atom}) (π : {finperm atom}).
 
-Definition equivariant1 X Y (f : X -> Y) := forall π x, f (π \dot x) = π \dot (f x). 
+Definition equivariant1 X Y (f : X -> Y) := forall π x, f (π \dot x) = π \dot (f x).
 
-Definition equivariant2 X Y Z (f : X -> Y -> Z) := 
+Definition equivariant2 X Y Z (f : X -> Y -> Z) :=
   forall π x y,  f (π \dot x) (π \dot y) = π \dot (f x y).
 
 Definition equivariant3 X Y Z W (f :  X -> Y -> Z -> W) :=
@@ -744,38 +804,38 @@ Definition equivariant3 X Y Z W (f :  X -> Y -> Z -> W) :=
 Definition equivariant_prop X Y (R : X -> Y -> Prop) :=
   forall π x y, R (π \dot x) (π \dot y) <-> R x y.
 
-Lemma all2_equivariant {A : nominalType atom} (s1 s2 : seq A) (p : A -> A -> bool) π :
-  equivariant2 p -> 
-  all2 p (π \dot s1) (π \dot s2) = all2 p s1 s2.  
+Lemma all2_equivariant {A : {nominalType atom}} (s1 s2 : seq A) (p : A -> A -> bool) π :
+  equivariant2 p ->
+  all2 p (π \dot s1) (π \dot s2) = all2 p s1 s2.
 Proof.
 move => p_equi.
 rewrite all2_map. apply all2_eq => x y.
 exact/p_equi.
-Qed. 
+Qed.
 
-Lemma map_equivariant {A B : nominalType atom} (f : A -> B) l π : 
+Lemma map_equivariant {A B : {nominalType atom}} (f : A -> B) l π :
   (forall x, x \in l -> π \dot f x = f (π \dot x)) ->
    π \dot (map f l) = map f (π \dot l).
-Proof.  
+Proof.
 move => f_equiv.
-rewrite listactE -!map_comp. 
-apply eq_in_map => t tl /=.
+rewrite listactE -!map_comp.
+apply/eq_in_map => t tl /=.
 exact/f_equiv.
 Qed.
 
-Lemma if_equivariant {X : nominalType atom} (u v : X) b π : 
+Lemma if_equivariant {X : {nominalType atom}} (u v : X) b π :
   π \dot (if b then u else v) = if b then (π \dot u) else π \dot v.
 Proof. by case: b. Qed.
 
 Lemma equi_funprop X Y Z (f : X -> Y -> Z) (R : Z -> Z -> Prop) :
-  equivariant2 f -> equivariant_prop R -> 
-  equivariant_prop (fun (x : X) (y : Y * Y) => R (f x y.1) (f x y.2)). 
+  equivariant2 f -> equivariant_prop R ->
+  equivariant_prop (fun (x : X) (y : Y * Y) => R (f x y.1) (f x y.2)).
 Proof.
 move => equi_f equi_R π x; case => y y' /=.
-by rewrite !equi_f equi_R. 
+by rewrite !equi_f equi_R.
 Qed.
 
-Lemma swap_equiv X : 
+Lemma swap_equiv X :
   equivariant2 (fun (a : atom) (z : atom * X) => swap z.1 a \dot z.2).
 Proof.
 move => π a; case => b x /=. by rewrite -!actM tfinperm_conj.
@@ -842,7 +902,7 @@ End EquivariantFunctions.
 
 Section SomeAny.
 
-Implicit Type (X : nominalType atom).
+Implicit Type (X : {nominalType atom}).
 
 Definition new (P : atom -> Prop) :=
   exists A : {fset atom}, forall a, a # A -> P a.
@@ -861,15 +921,15 @@ Theorem some_any X (R : atom -> X -> Prop) :
       -> (forall a, a # x -> R a x)
     ].
 Proof.
-move => Requi; split. 
+move => Requi; split.
   - exists (support x) => a /fresh_fsetP/fresh_support. exact: (H a).
   - move => [S aNSR].
     apply/(Requi (swap (fresh_in x) (fresh_in (x,S)))).
-    rewrite swapL [_ \dot x]act_fresh; try (by freshTac). 
+    rewrite swapL [_ \dot x]act_fresh; try (by freshTac).
     apply/aNSR. by freshTac.
   - move => Rfresh. exists (fresh_in x) => //. exact: fresh1P.
   - move => [a a_fresh_x rax] a' a'_fresh_x.
-    rewrite -[a'](tfinpermL a a') -[x](@act_fresh _ a a') //. 
+    rewrite -[a'](tfinpermL a a') -[x](@act_fresh _ a a') //.
     by apply/Requi.
 Qed.
 
@@ -877,12 +937,12 @@ Lemma new_forall X (R : atom -> X -> Prop) :
   equivariant_prop R ->
   forall x : X, ((\new a, (R a x)) <-> (forall a, a # x -> R a x)).
 Proof.
-move=> Requi x. have [? ne ef] := some_any Requi x. 
+move=> Requi x. have [? ne ef] := some_any Requi x.
 by split => // /ne /ef.
 Qed.
 
 Lemma new_exists X (R : atom -> X -> Prop) :
-  equivariant_prop R -> 
+  equivariant_prop R ->
   forall x : X, ((\new a, (R a x)) <-> (exists2 a, a # x & R a x)).
 Proof.
 move=> Requi x; have [fn nf nh ef] := some_any Requi x.
@@ -891,16 +951,16 @@ Qed.
 
 Lemma fresh_new X (R : atom -> X -> Prop) :
   equivariant_prop R ->
-  forall x: X, R (fresh_in x) x <-> \new a, (R a x). 
+  forall x: X, R (fresh_in x) x <-> \new a, (R a x).
 Proof.
-move=> Requi x. have [fn nf nh ef] := some_any Requi x. 
-by split => [/nh/ef/fn | /nf]. 
+move=> Requi x. have [fn nf nh ef] := some_any Requi x.
+by split => [/nh/ef/fn | /nf].
 Qed.
 
 Lemma some_fresh_new X (R : atom -> X -> Prop) :
   equivariant_prop R ->
   forall (y : atom) (x : X), y # x -> (R y x) <-> \new a, (R a x).
-Proof.  
+Proof.
 move => Requi y x yFx.
 split => [Ryx|/(new_forall Requi) new_Rax].
   apply new_exists => //.
@@ -929,12 +989,12 @@ exists (\fbigcup_(y in Y) (Supp y)) => a aFSuppy y.
 apply HSupp.
 Admitted.
 
-Lemma new_and P1 P2 : 
+Lemma new_and P1 P2 :
   \new z, (P1 z /\ P2 z) <-> (\new z, (P1 z) /\ \new z, (P2 z)).
 Proof.
 split.
   move => [S] HS; split;
-  exists S => a aFS. 
+  exists S => a aFS.
     exact: (proj1 (HS _ aFS)).
   exact: (proj2 (HS _ aFS)).
 move => [[S1] HS1 [S2] HS2].
@@ -943,7 +1003,7 @@ exists (S1 `|` S2) => a aFS1S2; split.
 exact/(HS2 a)/(fresh_fsetU2 aFS1S2).
 Qed.
 
-Lemma new_andb P1 P2 : 
+Lemma new_andb P1 P2 :
   \new z, (P1 z && P2 z) <-> (\new z, (P1 z) /\ \new z, (P2 z)).
 Proof.
 have andb_eq_and : \new z, (P1 z && P2 z) <-> \new z, (P1 z /\ P2 z).
@@ -954,7 +1014,7 @@ move => ?. exact/andb_eq_and/new_and.
 Qed.
 
 
-Lemma new_all2 {A : eqType} {p : atom -> A -> A -> bool} {l1 l2 : seq A} : 
+Lemma new_all2 {A : eqType} {p : atom -> A -> A -> bool} {l1 l2 : seq A} :
   (\new z, (all2 (p z) l1 l2)) <-> (all2_prop (fun t1 t2 => \new z, (p z t1 t2)) l1 l2).
 Proof.
 elim: l1 l2 => /=.
@@ -963,7 +1023,7 @@ elim: l1 l2 => /=.
   by move => [S] /(_ _ (fresh1P S)).
 move => a1 l1 IHl1 [|a2 l2].
   split => //. by move => [S] /(_ _ (fresh1P S)).
-split. 
+split.
   move/new_andb => [? ?]; split => //.
   by apply/IHl1.
 move => [? ?]; apply/new_andb; split => //.

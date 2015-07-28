@@ -1,8 +1,8 @@
-From Ssreflect
+From mathcomp
 Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
-From MathComp
+From mathcomp
 Require Import bigop  finfun finset generic_quotient perm tuple fingroup.
-From Nominal
+
 Require Import finmap finsfun finperm nominal w.
 
 Set Implicit Arguments.

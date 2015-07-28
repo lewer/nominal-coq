@@ -1,6 +1,6 @@
-From Ssreflect
+From mathcomp
 Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
-From MathComp
+From mathcomp
 Require Import bigop  finfun finset generic_quotient.
 
 Set Implicit Arguments.
