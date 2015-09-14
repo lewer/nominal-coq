@@ -1,7 +1,7 @@
-From mathcomp
+From Ssreflect
 Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
-From mathcomp
-Require Import bigop  finfun finset generic_quotient.
+From MathComp
+Require Import bigop  finfun finset generic_quotient tuple.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -202,3 +202,27 @@ move => all_P_eq_Q.
 split => H x.    
 all: exact/all_P_eq_Q. 
 Qed.
+
+Section Ilist.
+Variable A : Type.
+
+Inductive ilist : nat -> Type :=
+  |Nil : ilist 0
+  |Cons : forall (h : A) {n : nat}, ilist n -> ilist (n.+1).
+
+End Ilist.
+
+Arguments Nil [A].
+Notation " a ::: q " := (Cons a q) (right associativity, at level 70).
+
+Section Ilist_all.
+
+Variable T : Type.
+Variable P : T -> Prop.
+
+Fixpoint All n (ls : ilist T n) : Prop :=
+  match ls with
+    |Nil => True
+    |t:::q => P t /\ All q
+  end.
+End Ilist_all.

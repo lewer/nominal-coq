@@ -1,7 +1,7 @@
-From mathcomp
+From Ssreflect
 Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
 
-From mathcomp
+From MathComp
 Require Import bigop  finfun finset generic_quotient perm tuple fingroup.
 
 Require Import finmap finsfun finperm utilitaires.
@@ -653,7 +653,7 @@ apply (supp_Sy_y π) => b bSy. apply H.
   by rewrite in_fsetU bSy orbT.
 Qed.
 
-Lemma fresh_nil {X} a : a # Nil X.
+Lemma fresh_nil {X} a : a # @nil X.
 Proof.
 exists fset0. split => //.
 by rewrite in_fset0.
