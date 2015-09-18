@@ -6,9 +6,9 @@
 (* License to be determined                                              *)
 (*************************************************************************)
 
-From mathcomp
+From Ssreflect
 Require Import ssreflect ssrbool ssrnat eqtype ssrfun seq choice fintype.
-From mathcomp
+From MathComp
 Require Import path finset finfun bigop.
 
 (*****************************************************************************)

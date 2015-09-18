@@ -1,7 +1,7 @@
-From mathcomp
+From Ssreflect
 Require Import ssreflect ssrfun ssrbool ssrnat eqtype choice seq fintype.
 
-From mathcomp
+From MathComp
 Require Import bigop  finfun finset generic_quotient perm tuple fingroup.
 Require Import finmap.
 Require Import finsfun.

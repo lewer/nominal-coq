@@ -89,6 +89,7 @@ Variables (A : keyType) (W X Y Z : {nominalType A}).
 Implicit Types (π : {finperm A}) (x : X).
 
 Local Notation actX := (@act A X).
+Definition pfixe (π : {finperm A}) (B : {fset A}) := forall a, a \in B -> π a = a. 
 
 Lemma act1 : actX 1 =1 id.
 Proof. by case: X => ? [? [[]]]. Qed.
@@ -96,7 +97,7 @@ Proof. by case: X => ? [? [[]]]. Qed.
 Lemma actM (π1 π2 : {finperm A}) : forall x : X,  (π1 * π2) \dot x = π1 \dot (π2 \dot x).
 Proof. by case: X => ? [? [[]]]. Qed.
 
-Lemma act_id : forall π (x : X), (forall a : A, a \in support x -> π a = a)
+Lemma act_id : forall π (x : X), pfixe π (support x)
                    -> (act π x) = x.
 Proof. by case: X => ? [? []]. Qed.
 
@@ -117,6 +118,18 @@ Proof. by rewrite -!actM tfinperm_conj_imL. Qed.
 
 Lemma act_conj_imR π a b x : π \dot (swap (π^-1 a) b) \dot x = swap a (π b) \dot π \dot x.
 Proof. by rewrite -!actM tfinperm_conj_imR. Qed.
+
+Lemma pfixeU π B C : pfixe π (B `|` C) -> pfixe π B /\ pfixe π C. 
+Proof.
+move=> fixeBC; split; rewrite/pfixe => a Ha.
+all: by apply/fixeBC; rewrite in_fsetU Ha ?orbT.
+Qed.
+
+Lemma pfixe1U π a B : pfixe π (a |` B) -> π a = a /\ pfixe π B.
+Proof.
+move => fixeaB; split => [|b Hb] ; first exact/fixeaB/fset1U1.
+exact/fixeaB/fset1Ur.
+Qed.
 
 End BasicNominalTheory.
 
