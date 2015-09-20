@@ -305,81 +305,62 @@ Proof. by []. Qed.
 
 End NominalProd.
 
-Section NominalAtoms.
+Section NominalSatoms.
 
 Variable (asort : finType).
 
-Inductive iatom := Iatom of asort & atom.
-
-Definition sort (a : iatom) := match a with |Iatom s a => s end.
+Definition satom := (asort * atom)%type.
 
 Implicit Types (π : {finperm atom}).
 
-Definition atomact aso π (a : iatom) := 
-  match a with
-    |Iatom s a => Iatom s (if aso == s then π a else a)
-  end.
+Definition satomact s π (a : satom) :=
+  (a.1, if s == a.1 then π a.2 else a.2).
+  
+Lemma satomact1 s (a : satom) : satomact s 1 a = a.
+Proof. rewrite/satomact finsfun1 if_same. by case: a. Qed.
 
-Lemma atomact1 aso : forall (a : iatom), atomact aso 1 a = a.
+Lemma satomactM s : 
+  forall π π' (a : satom), satomact s (π * π') a = satomact s π (satomact s π' a).
 Proof.
-case => s a /=. rewrite finsfun1. 
-by case: (aso == s).
+rewrite/satomact => π π' [s' a] /=.
+case: (s == s') => //. by rewrite finsfunM.
 Qed.
 
-Lemma atomactM aso : 
-  forall π π' a, atomact aso (π * π') a = atomact aso π (atomact aso π' a).
+Lemma satomactproper s (x y : satom) π : x = y -> (satomact s π x) = (satomact s π y).
+Proof. by move ->. Qed.
+
+Definition satom_nominal_setoid_mixin :=
+  @PermSetoidMixin _ asort satom (@eq satom) satomact satomact1 satomactM satomactproper.
+
+Definition satom_support s (a : satom) :=
+  if s == a.1 then [fset a.2] else fset0.
+  
+Lemma satomact_id s π a :
+     pfixe π (satom_support s a) -> satomact s π a = a.
 Proof. 
-move => π π' [s a] /=; rewrite /atomact finsfunM. 
-by case: (aso == s) => /=. 
+case: a => [s' a] /=. rewrite /satomact/satom_support/=. 
+by case: (s == s') => // /pfixe1 ->.
 Qed.
 
-Lemma atomactproper aso : forall x y π, x = y -> (atomact aso π x) = (atomact aso π y).
-Proof. by move => x y π ->. Qed.
+Definition satom_nominal_mixin :=
+  @NominalMixin _ asort satom satom_nominal_setoid_mixin _ satomact_id.
 
-Definition atom_nominal_setoid_mixin :=
-  @PermSetoidMixin _ asort iatom (@eq iatom) atomact atomact1 atomactM atomactproper.
+Canonical satom_nominal_type := NominalType atom asort satom satom_nominal_mixin.
 
-Definition atom_support aso (a : iatom) :=
-  match a with
-    |Iatom s a => if aso == s then [fset a] else fset0
-  end.
+(* Lemma swapL (a b : satom) : (swap a b) \dot a = b. *)
+(* Proof. by rewrite /act /= /satomact tfinpermL. Qed. *)
 
-Lemma atomact_id aso π a :
-     pfixe π (atom_support aso a) -> atomact aso π a = a.
-Proof. 
-case: a => s a /=. 
-case: (aso == s) => //= πfixea.  
-by rewrite πfixea // in_fset1 eqxx.
+(* Lemma swapR (a b : satom) : (swap a b) \dot b = a. *)
+(* Proof. by rewrite /act /= /satomact tfinpermR. Qed. *)
+
+Lemma satomactE s π (a : satom) :
+  π \dot_(s) a = (a.1, if s == a.1  then π a.2 else a.2).
+by [].
 Qed.
 
-(* ce qui suit = n'importe quoi. hériter structure choiceType simplement *)
+(* Proof. rewrite/act/=/satomact. by case: (s == s'). Qed. *)
 
-Definition atomencode : iatom -> GenTree.tree atom. Admitted.
-Definition atomdecode : GenTree.tree atom -> iatom. Admitted.
-Lemma atomencodeK : cancel atomencode atomdecode. Admitted.
-
-Definition iatom_eqMixin := CanEqMixin atomencodeK.
-Canonical iatom_eqType := EqType iatom (iatom_eqMixin).
-Definition iatom_choiceMixin := CanChoiceMixin atomencodeK.
-Canonical iatom_choiceType := ChoiceType iatom iatom_choiceMixin.
-Definition iatom_countMixin  := CanCountMixin atomencodeK.
-Canonical iatom_countType  := CountType iatom iatom_countMixin.
-
-Definition atom_nominal_mixin :=
-  @NominalMixin _ asort iatom atom_nominal_setoid_mixin _ atomact_id.
-
-Canonical atom_nominal_type := NominalType atom asort iatom atom_nominal_mixin.
-
-(* Lemma swapL (a b : atom) : (swap a b) \dot a = b. *)
-(* Proof. by rewrite /act /= /atomact tfinpermL. Qed. *)
-
-(* Lemma swapR (a b : atom) : (swap a b) \dot b = a. *)
-(* Proof. by rewrite /act /= /atomact tfinpermR. Qed. *)
-
-(* Lemma atomactE π a : π \dot a = π a. *)
-(* Proof. by []. Qed. *)
-
-End NominalAtoms.
+End NominalSatoms.
 
 (* Section NominalAtomSubsets. *)
 
@@ -437,29 +418,30 @@ End NominalAtoms.
 
 (* End NominalAtomSubsets. *)
 
-(* Section Freshness. *)
+Section Freshness.
 
-(* Implicit Types (X Y: {nominalType atom}). *)
+Context (asort : finType).
+Implicit Types (X Y : @nominalType _ asort (Phant atom)).  
 
-(* Definition max (A : {fset atom}) := \max_(a : A) val a. *)
+Definition max (A : {fset atom}) := \max_(a : A) val a.
 
-(* Definition fresh_in X (x : X) : atom := (max (support x)).+1. *)
+Definition fresh_in s {X} (x : X) : atom := (max (support s x)).+1.
 
-(* Definition supports X (A : {fset atom}) (x : X) := *)
-(*   forall (π : {finperm atom}), (forall a : atom, a \in A -> π a = a) -> π \dot x = x. *)
+Definition supports X s (A : {fset atom}) (x : X) :=
+  forall (π : {finperm atom}), (forall a : atom, a \in A -> π a = a) -> π \dot_(s) x = x.
 
-(* Lemma supportsP (X : {nominalType atom}) (x : X) : *)
-(*   supports (support x) x. *)
-(* Proof. *)
-(* move => π. *)
-(* exact: act_id. *)
-(* Qed. *)
+Lemma supportsP {X} s (x : X) :
+  supports s (support s x) x.
+Proof.
+move => π.
+exact: act_id.
+Qed.
 
 (* Lemma in_le_max x (A : {fset atom}) : x \in A -> x <= max A. *)
 (* Proof. *)
 (* Admitted. *)
 
-(* Lemma fresh_notin (A : {fset atom}) : (fresh_in A) \notin A. *)
+(* Lemma fresh_notin (s : asort) (A : {fset atom}) : (fresh_in s A) \notin A. *)
 (* Proof. *)
 (*   rewrite /fresh_in /support /=. *)
 (*   have bounded: forall x, x \in A -> x != (max A).+1. *)
@@ -733,7 +715,7 @@ End NominalAtoms.
 (* by rewrite -mem_finsupp => /disj_pi_T /fresh_fsetP. *)
 (* Qed. *)
 
-(* End Freshness. *)
+End Freshness.
 
 (* Notation "a # x" := (fresh a x) (x at level 60, at level 60). *)
 
