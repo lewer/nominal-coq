@@ -125,6 +125,9 @@ move=> fixeBC; split; rewrite/pfixe => a Ha.
 all: by apply/fixeBC; rewrite in_fsetU Ha ?orbT.
 Qed.
 
+Lemma pfixe1 π a : pfixe π [fset a] -> π a = a.
+Proof. apply; exact/fset11. Qed.
+
 Lemma pfixe1U π a B : pfixe π (a |` B) -> π a = a /\ pfixe π B.
 Proof.
 move => fixeaB; split => [|b Hb] ; first exact/fixeaB/fset1U1.
