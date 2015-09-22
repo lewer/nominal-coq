@@ -324,6 +324,48 @@ unlock B; apply/eqP.
 by rewrite [_ == _]piE alphaE /= alpha_equivariant alpha_eqE reprK. 
 Qed.
 
+Section NominalTerm.
+
+Context (ar : arity).
+
+Implicit Types (π : {finperm atom}).
+
+Definition termact π (t : term ar) := \pi_(term ar) (π \dot repr t).
+
+Lemma termact1 : termact 1 =1 id.
+Proof. move => t /=. by rewrite /termact act1 reprK. Qed.
+
+Lemma termact_equiv π t :
+  π \dot (repr t) == repr (termact π t) %[mod (term ar)].
+Proof. by rewrite /termact reprK. Qed.
+
+Lemma termactM π π' t : termact (π * π') t = termact π (termact π' t).
+Proof.
+apply/eqP.
+by rewrite /termact actM piE alpha_equivariant alpha_eqE reprK.
+Qed.
+
+Lemma termactproper :
+  forall t1 t2 π, t1 = t2 -> (termact π t1) = (termact π t2).
+Proof. by move => t1 t2 π ->. Qed.
+
+Definition term_nominal_setoid_mixin :=
+  @PermSetoidMixin _ (term ar) (@eq (term ar)) termact termact1 termactM termactproper.
+
+Lemma termact_id π t :
+     pfixe π (support (repr t)) -> termact π t = t.
+Proof.
+rewrite/termact => Hact_id.
+by rewrite act_id // reprK.
+Qed.
+
+Definition term_nominal_mixin :=
+  @NominalMixin _ _ term_nominal_setoid_mixin _ termact_id.
+
+Canonical term_nominalType := NominalType atom (term ar) term_nominal_mixin.
+
+End NominalTerm.
+
 
 End FixedSignature.
 
