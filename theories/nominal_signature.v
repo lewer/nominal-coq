@@ -246,23 +246,23 @@ elim: n ar1 ar2 t1 t2 => /= [|n IHn] ? ? [x1|c1 t1 |ar1 ar1' t1 t1' |ar1 x1 t1]
     by rewrite eq_fset2 -fsetUA [X in _ `|` X]fsetUC fsetUA.
 Qed.
 
-Lemma alpha_trans ar1 ar2 ar3 (t1 : rterm ar1) (t2 : rterm ar2) (t3 : rterm ar3) :
+Lemma alpha_trans ar1 ar2 ar3 (t2 : rterm ar2) (t1 : rterm ar1) (t3 : rterm ar3) :
   alpha t1 t2 -> alpha t2 t3 -> alpha t1 t3.
 Proof.
 move: {-1}(rdepth t1) (leqnn (rdepth t1)) => n.
 elim: n ar1 ar2 ar3 t1 t2 t3 => [|n IHn] ar1 ar2 ar3
-                                         [x1|c1 t1|? ? t1 t1'|? x1 t1]
                                          [x2|c2 t2|? ? t2 t2'|? x2 t2]
+                                         [x1|c1 t1|? ? t1 t1'|? x1 t1]
                                          [x3|c3 t3|? ? t3 t3'|? x3 t3] //.
   - rewrite !alpha_rAtomE => _. exact/eq_op_trans.
   - rewrite !alpha_rAtomE => _. exact/eq_op_trans.
-  - rewrite /= ltnS => /(IHn _ _ _ t1 t2 t3) Htrans. 
+  - rewrite /= ltnS => /(IHn _ _ _ t2 t1 t3) Htrans. 
     rewrite !alpha_rCE => /andP [c1_eq_c2 t1t2] /andP [c2_eq_c3 t2t3].
-    apply/andP; split; first exact/(@eq_op_trans _ c2 c1 c3).
+    apply/andP; split; first exact/(@eq_op_trans _ c1 c2 c3).
     exact/Htrans.
   - rewrite !alpha_rPairE /= ltnS geq_max => /andP [? ?] /andP [? ?] /andP [? ?].
-    apply/andP; split; first exact/(@IHn _ _ _ t1 t2 t3) => //.
-    exact/(@IHn _ _ _ t1' t2' t3').
+    apply/andP; split; first exact/(@IHn _ _ _ t2 t1 t3) => //.
+    exact/(@IHn _ _ _ t2' t1' t3').
   - rewrite /= ltnS => ? /alpha_BP [St1t2 Ht1t2] /alpha_BP [St2t3 Ht2t3].
     apply/alpha_BP. exists (St1t2 `|` St2t3) => a aF.
     apply/IHn; first by rewrite rdepth_perm.
@@ -271,6 +271,59 @@ elim: n ar1 ar2 ar3 t1 t2 t3 => [|n IHn] ar1 ar2 ar3
 Qed.
     
 End AlphaEquivalence.
+
+Section Quotient.
+
+Context (s : arity).
+
+Canonical alpha_equiv :=
+  EquivRel (@alpha s s) (@alpha_refl s) (@alpha_sym s s) (@alpha_trans s s s).
+
+Definition term := {eq_quot (@alpha s s)}.
+Definition term_eqMixin := [eqMixin of term].
+Canonical term_eqType := EqType term term_eqMixin.
+Canonical term_choiceType := Eval hnf in [choiceType of term].
+Canonical term_countType := Eval hnf in [countType of term].
+Canonical term_quotType := Eval hnf in [quotType of term].
+Canonical term_eqQuotType := Eval hnf in
+      [eqQuotType (@alpha s s) of term].
+
+Lemma alpha_eqE (t t' : rterm s) : alpha t t' = (t == t' %[mod term]).
+Proof. by rewrite piE. Qed.
+
+End Quotient.
+
+Definition Atom x := lift_cst (term atom_arity) (rAtom x).
+
+Lemma rAtomK x : \pi (rAtom x) = Atom x.
+Proof. by unlock Atom. Qed.
+
+Definition C c := lift_op1 (term _) (rC c).
+Arguments C : clear implicits.
+
+Lemma rCK c t : \pi (rC c t) = C c (\pi t).
+Proof.
+unlock C => /=. apply/eqP.
+by rewrite [_ == _]piE alphaE eqxx /= alpha_eqE reprK. 
+Qed.
+
+Definition Pair ar1 ar2 := 
+  lift_op2 (term _) (@rPair ar1 ar2).
+
+Lemma rPairK ar1 ar2 (t1 : rterm ar1) (t2 : rterm ar2) :
+  \pi (rPair t1 t2) = Pair (\pi t1) (\pi t2).
+Proof.
+unlock Pair => /=; apply /eqP.
+by rewrite [_ == _]piE !alphaE !alpha_eqE !reprK !eqxx.
+Qed.
+
+Definition B ar x := lift_op1 (term _) (@rB ar x).
+Lemma rBK ar x (t : rterm ar) : \pi (rB x t) = B x (\pi t). 
+Proof.
+unlock B; apply/eqP.
+by rewrite [_ == _]piE alphaE /= alpha_equivariant alpha_eqE reprK. 
+Qed.
+
 
 End FixedSignature.
 
