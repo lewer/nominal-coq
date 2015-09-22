@@ -7,6 +7,8 @@ Require Import finmap finsfun finperm nominal utilitaires.
 
 Require Import EqdepFacts.
 
+Require Import Equations.Equations.
+Require Import Equations.DepElimDec.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -148,7 +150,7 @@ Lemma rdepth_perm (π : {finperm atom}) {ar} (t : rterm ar) :
   rdepth (π \dot t) = rdepth t.
 Proof.
 elim: t => [a|c t IHt|art1 art2 t1 IHt1 t2 IHt2|art a t IHt] //=.
-all: by rewrite ?IHt ?(IHt1, IHt2).
+all: by rewrite ?IHt ?IHt1 ?IHt2.
 Qed.
 
 Lemma alpha_recE n (ar1 ar2 : arity) (t1 : rterm ar1) (t2 : rterm ar2) :
@@ -160,8 +162,8 @@ elim: n ar1 ar2 t1 t2 => [|n IHn] ar1 ar2 [x1|c1 t1|art1 art1' t1 t1'|art1 x1 t1
 all: rewrite !ltnS. 
   - by move => /(IHn _ _ t1 t2) H /H ->.
   - rewrite geq_max => mn /andP [t1m t2m].
-    by rewrite !IHn // ?(leq_maxl, leq_maxr) ?geq_max
-            ?(leq_trans t1m, leq_trans t2m).
+    rewrite !IHn // ?leq_maxl ?leq_maxr ?geq_max //
+            ?(leq_trans t1m) // ?(leq_trans t2m) //.
   - move => mn t1m. 
     rewrite !IHn // ?rdepth_perm //; exact/(leq_trans t1m).
 Qed.
@@ -199,7 +201,7 @@ Proof. by []. Qed.
 Lemma alpha_rPairE aru1 aru2 art1 art2 
       (u1 : rterm aru1) (u2 : rterm aru2) (t1 : rterm art1) (t2 : rterm art2) : 
   alpha (rPair t1 u1) (rPair t2 u2) = (alpha t1 t2) && (alpha u1 u2).
-Proof. by rewrite/alpha/= !alpha_recE // ?(leq_maxl, leq_maxr). Qed.
+Proof. by rewrite/alpha/= !alpha_recE // ?leq_maxl ?leq_maxr. Qed.
 
 Lemma alpha_rBE ar1 ar2 x1 x2 (t1 : rterm ar1) (t2 : rterm ar2) :
   alpha (rB x1 t1) (rB x2 t2) = 
@@ -293,7 +295,7 @@ Proof. by rewrite piE. Qed.
 
 End Quotient.
 
-Definition Atom x := lift_cst (term atom_arity) (rAtom x).
+Definition Atom x := lift_cst (term _) (rAtom x).
 
 Lemma rAtomK x : \pi (rAtom x) = Atom x.
 Proof. by unlock Atom. Qed.
@@ -366,6 +368,259 @@ Canonical term_nominalType := NominalType atom (term ar) term_nominal_mixin.
 
 End NominalTerm.
 
+Section VariousLemmas.
+
+Lemma pi_equivariant ar π (t : rterm ar) :
+  π \dot (\pi_(term ar) t) = \pi (π \dot t).
+Proof.
+apply/eqmodP => /=.
+by rewrite alpha_equivariant alpha_eqE reprK.
+Qed.
+
+Lemma repr_equivariant ar π (t : term ar) : repr (π \dot t) == π \dot (repr t) %[mod (term ar)].
+Proof. by rewrite -pi_equivariant !reprK. Qed.
+
+Lemma Atom_equivariant π x : π \dot (Atom x) = Atom (π x).
+Proof. by rewrite -rAtomK pi_equivariant /= rAtomK. Qed.
+
+Lemma C_equivariant π c (t : term (cons_arity c)) :
+  π \dot (C c t) = C c (π \dot t).
+Proof.
+unlock C.
+by rewrite pi_equivariant !rCK reprK -pi_equivariant reprK. 
+Qed.
+
+Lemma Pair_equivariant ar1 ar2 π (t1 : term ar1) (t2 : term ar2) :
+  π \dot (Pair t1 t2) = Pair (π \dot t1) (π \dot t2).
+Proof.
+unlock Pair.
+by rewrite pi_equivariant !rPairK -!pi_equivariant !reprK. 
+Qed.
+
+Lemma B_equivariant ar π x (t : term ar) :
+  π \dot (B x t) = B (π x) (π \dot t).
+Proof.
+unlock B.
+by rewrite pi_equivariant !rBK reprK -pi_equivariant reprK.
+Qed.
+
+(* Lemma fresh_repr x (t : W) : x # (repr t) -> x # t. *)
+(* Proof. *)
+(* move => [S [xNS S_supp_t]]. *)
+(* exists S; split => //. *)
+(* move => π H. by rewrite -[t]reprK pi_equivariant (S_supp_t π) //. *)
+(* Qed. *)
+
+(* Lemma fresh_pi x t : x # t -> x # (\pi_W t). *)
+(* Proof. *)
+(* move => [S [xNS S_supp_t]]. *)
+(* exists S; split => //. *)
+(* move => π H. by rewrite pi_equivariant (S_supp_t π). *)
+(* Qed. *)
+
+(* Lemma eq_BConsE c x1 x2 a1 a2 f1 f2 : *)
+(*   @BCons c x1 a1 f1 = @BCons c x2 a2 f2 -> *)
+(*   a1 = a2 /\ *)
+(*   forall z, z # (x1, x2, f1, f2) -> *)
+(*              swap x1 z \dot f1 = swap x2 z \dot f2. *)
+(* Proof. *)
+(* unlock BCons => /eqP. *)
+(* rewrite -alpha_eqE alpha_BConsE => /andP [/eqP ->] /=. *)
+(* set z := fresh_in _ => /forallP Halpha. *)
+(* split => // z'. *)
+(* repeat(move/fresh_prod; case); move => *. *)
+(* apply/(@act_inj _ _ (swap z z'))/funext => i. *)
+(* freshTacCtxt z. *)
+(* rewrite [LHS]act_conj [RHS]act_conj !tfinpermR !tfinperm_fresh //. *)
+(* rewrite ![swap z z' \dot _]act_fresh. *)
+(*   by move: (Halpha i); rewrite alpha_eqE -!pi_equivariant !reprK => /eqP. *)
+(* 1: apply/fresh_repr; change (z # (repr \o f2) i). *)
+(* 3: apply/fresh_repr; change (z # (repr \o f1) i). *)
+(* all:exact/fresh_fun. *)
+(* Qed. *)
+
+Lemma AtomK x : repr (Atom x) = rAtom x.
+Proof.
+have : alpha (repr (Atom x)) (rAtom x).
+  by rewrite alpha_eqE reprK rAtomK.
+generalize (repr (Atom x)). 
+depelim r.
+by rewrite alphaE => /eqP ->.
+Qed.
+
+(* Lemma ConsK c a f  : exists f', repr (@Cons c a f) = @rCons c a f' /\ (f = \pi \o f'). *)
+(* Proof. *)
+(* have: alpha (repr (@Cons c a f)) (@rCons c a (repr \o f)). *)
+(*   by rewrite alpha_eqE reprK rConsK pi_reprK. *)
+(* case: (repr (Cons _ _)) => //= c2 a2 f2. *)
+(* have [/eqP c_eq_c2|/eqP c_neq_c2 /alpha_Cons_eqc] := boolP (c == c2); *)
+(*     last by congruence. *)
+(* subst. *)
+(* move/alpha_ConsP => [a2_eq_a f2_alpha_reprf]. *)
+(* exists f2. rewrite a2_eq_a. split => //. *)
+(* apply/funext => i /=. *)
+(* move: (f2_alpha_reprf i). *)
+(* by rewrite alpha_eqE reprK => /eqP. *)
+(* Qed. *)
+
+(* Lemma BConsK c x a f : exists (y : atom) f', *)
+(*    repr (@BCons c x a f) = @rBCons c y a f'. *)
+(* Proof. *)
+(* have: alpha (repr (@BCons c x a f)) (@rBCons c x a (repr \o f)). *)
+(*   by rewrite alpha_eqE reprK rBConsK pi_reprK. *)
+(* case: (repr (BCons _ _ _)) => //= c2 x2 a2 f2. *)
+(* have [/eqP c_eq_c2|/eqP c_neq_c2 /alpha_BCons_eqc] := boolP (c == c2); *)
+(*     last by congruence. *)
+(* subst. *)
+(* move/alpha_BConsP => [a2_eq_a _]. *)
+(* exists x2; exists f2. *)
+(* by rewrite a2_eq_a. *)
+(* Qed. *)
+
+
+(* Lemma Var_inj : injective Var. *)
+(* Proof. *)
+(* move => x y /(congr1 repr). rewrite !VarK => H. by injection H. Qed. *)
+
+(* Lemma Cons_inj c a1 a2 f1 f2 : *)
+(*   @Cons c a1 f1 = @Cons c a2 f2 -> a1 = a2 /\ f1 = f2. *)
+(* Proof. *)
+(* move/(congr1 repr). *)
+(* have [f1' [-> ->]] := @ConsK c a1 f1. *)
+(* have [f2' [-> ->]] := @ConsK c a2 f2. *)
+(* move => H; injection H. *)
+(* move/eq_sigT_sig_eq => [p]. *)
+(* have -> /= : p = erefl c by apply/eq_axiomK. *)
+(* move => -> /eq_sigT_sig_eq => [[q]]. *)
+(* have -> /= : q = erefl c by apply/eq_axiomK. *)
+(* by []. *)
+(* Qed. *)
+
+(* Lemma BConsx_inj c x a1 a2 f1 f2 : *)
+(*   (@BCons c x a1 f1 = @BCons c x a2 f2) -> a1 = a2 /\ f1 = f2. *)
+(* Proof. *)
+(* pose z := fresh_in (x, f1, f2). *)
+(* move => /eq_BConsE [a1_eq_2] /(_ z) H. *)
+(* split => //. *)
+(* apply/(@act_inj _ _ (swap x z)). *)
+(* freshTacCtxt z. *)
+(* apply/H. by repeat (apply/fresh_prod; split). *)
+(* Qed. *)
+
+(* Lemma fresh_Var x y : x # (Var y) -> x # y. *)
+(* Proof. *)
+(* move => [S] [xNS S_supp_Ly]. *)
+(* exists S; split => // π HS. *)
+(* apply Var_inj. rewrite -Var_equivariant. *)
+(* exact: S_supp_Ly. *)
+(* Qed. *)
+
+(* (* Lemma fresh_Cons x c a f : x # (@Cons c a f) -> x # a. *) *)
+(* (* Proof. *) *)
+(* (* move => [S] [xNS S_supp_caf]. *) *)
+(* (* exists S; split => // π HS. *) *)
+(* (* eapply proj2; apply Cons_inj. rewrite -Cons_equivariant. *) *)
+(* (* exact: S_supp_cl. *) *)
+(* (* Qed. *) *)
+
+(* Lemma fresh_rBCons x y c a f : *)
+(*   x # (@rBCons c y a f) -> x # (y, f). *)
+(* Proof. *)
+(* move => [S] [xNS S_supp_cyl]. *)
+(* exists S; split => // π Hπ. *)
+(* move: (S_supp_cyl π Hπ) => H.  injection H. *)
+(* move => /eq_sigT_sig_eq [p]. *)
+(* have -> /= : p = erefl c by apply eq_axiomK. *)
+(* move => πf_eq_f. *)
+(* by rewrite prodactE atomactE -{2}πf_eq_f => ->. *)
+(* Qed. *)
+
+(* Lemma fresh_BCons x y c a f : *)
+(*   x # y -> x # (@BCons c y a f) -> x # f. *)
+(* Proof. *)
+(* move => [S] [xNS S_supp_y] [S'] [xNS' S'_supp_cyf]. *)
+(* exists (S `|` S'); split. *)
+(*   by rewrite in_fsetU negb_or xNS xNS'. *)
+(* move => π Hπ. *)
+(* apply/(proj2 (@BConsx_inj c y a a _ _ _)). *)
+(* have y_eq_piy : π y = y. *)
+(*   apply S_supp_y => b bS. apply Hπ. *)
+(*   by rewrite in_fsetU bS. *)
+(* rewrite -{1}y_eq_piy -BCons_equivariant. *)
+(* apply S'_supp_cyf => b bS'. apply Hπ. *)
+(* by rewrite in_fsetU bS' orbT. *)
+(* Qed. *)
+
+(* Lemma eq_BCons c x y a f : *)
+(*   y # (x, f) -> @BCons c x a f = @BCons c y a (swap x y \dot f). *)
+(* Proof. *)
+(* repeat(move/fresh_prod; case); move => yFx yFf. *)
+(* unlock BCons. apply/eqmodP. *)
+(* rewrite /= alpha_BConsE eqxx /=. *)
+(* apply/forallP => i. *)
+(* rewrite alpha_eqE -!pi_equivariant !reprK. *)
+(* set z := fresh_in _. freshTacCtxt z. *)
+(* rewrite act_conj tfinpermL tfinperm_fresh //. *)
+(* rewrite [swap y z \dot (f i)]act_fresh //; first exact/fresh_fun. *)
+(* apply/fresh_repr. change (z # ((repr \o f) i)). *)
+(* exact/fresh_fun. *)
+(* Qed. *)
+
+(* Lemma bname_fresh (x : atom) c a f : x # (@BCons c x a f). *)
+(* Proof. *)
+(* pose y := fresh_in (x, f, @BCons c x a f); freshTacCtxt y. *)
+(* apply (@CFN_principle y) => //. *)
+(* rewrite BCons_equivariant tfinpermL. *)
+(* exact/sym_eq/eq_BCons/fresh_prod. *)
+(* Qed. *)
+
+End VariousLemmas.
+
+Section Depth.
+
+Definition depth ar (t : term ar) := rdepth (repr t).
+
+Lemma rdepth_alpha (ar1 ar2 : arity) (t1 : rterm ar1) (t2 : rterm ar2) : 
+  alpha t1 t2 -> rdepth t1 = rdepth t2.
+Proof.
+  elim: t1 ar2 t2 =>  [x1|c1 t1 IHt1|? ? t1 IHt1 t1' IHt1'|? x1 t1 IHt1] ar2
+                             [x2|c2 t2|? ? t2 t2'|? x2 t2] //=.
+  - by rewrite alphaE => /andP [_ /IHt1] ->. 
+  - by rewrite alphaE => /andP [/IHt1 -> /IHt1' ->].
+  - rewrite alphaE /=. set z := fresh_in _.
+    rewrite -(alpha_equivariant _ _ (swap x1 z)) -actM tfinperm_idempotent act1 => /IHt1.
+    by rewrite !rdepth_perm => ->.
+Qed.
+
+Lemma depth_rdepth ar (t : rterm ar) : depth (\pi t) = rdepth t.
+Proof.
+apply rdepth_alpha. by rewrite alpha_eqE reprK.
+Qed.
+
+Lemma depth_perm ar (t : term ar) π : depth (π \dot t) = depth t.
+Proof.
+rewrite/depth -[RHS](rdepth_perm π).
+apply rdepth_alpha. rewrite alpha_eqE.
+exact: repr_equivariant.
+Qed.
+
+Lemma depth_Atom x : depth (Atom x) = 0.
+Proof. by rewrite/depth AtomK. Qed.
+
+Lemma depth_C c t : depth (C c t) = (depth t).+1.
+Proof. unlock C. by rewrite depth_rdepth /=. Qed.
+
+Lemma depth_Pair ar1 ar2 (t1 : term ar1) (t2 : term ar2) :
+  depth (Pair t1 t2) = (maxn (depth t1) (depth t2)).+1.
+Proof.
+unlock Pair. by rewrite depth_rdepth /= -!depth_rdepth !reprK.
+Qed.
+
+Lemma depth_BinderCons ar x (t : term ar) :
+  depth (B x t) = (depth t).+1.
+Proof. unlock B. by rewrite depth_rdepth. Qed.
+
+End Depth.
 
 End FixedSignature.
 
