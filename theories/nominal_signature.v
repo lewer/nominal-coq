@@ -209,17 +209,18 @@ Proof. by rewrite/alpha/= rdepth_perm. Qed.
 
 Definition alphaE := (alpha_rAtomE, alpha_rCE, alpha_rPairE, alpha_rBE).
 
-Lemma alpha_BConsP ar1 ar2 (x1 x2 : atom) (t1 : rterm ar1) (t2 : rterm ar2) :
+Lemma alpha_BP ar1 ar2 (x1 x2 : atom) (t1 : rterm ar1) (t2 : rterm ar2) :
   reflect (\new z, (alpha (swap x1 z \dot t1) (swap x2 z \dot t2)))
           (alpha (rB x1 t1) (rB x2 t2)).
 Proof.
 apply: (equivP idP). rewrite alpha_rBE /=.
 set y := fresh_in _.
-pose R := fun z (x : prod prodatom (prod atom (prod (rterm ar1) (rterm ar2 )))) => 
-                alpha (swap x.1 z \dot x.2.2.1) (swap x.2.1 z \dot x.2.2.2) = true.
-apply/(@some_fresh_new _ R _ y (x1, x2, t1, t2)); last first.
-freshTac.
-(* en cours *)
+pose R := fun z (x : atom * atom * (rterm ar1) * (rterm ar2)) =>
+                alpha (swap x.1.1.1 z \dot x.1.2) (swap x.1.1.2 z \dot x.2) = true.
+apply/(@some_fresh_new _ R _ y (x1, x2, t1, t2)); last exact/fresh1P.
+move => π z [[[a b] u1] u2]. 
+by rewrite/R/= -act_conj -[X in alpha _ X]act_conj alpha_equivariant.
+Qed.
 
 Lemma alpha_refl ar : reflexive (@alpha ar ar).
 Proof.
@@ -262,8 +263,13 @@ elim: n ar1 ar2 ar3 t1 t2 t3 => [|n IHn] ar1 ar2 ar3
   - rewrite !alpha_rPairE /= ltnS geq_max => /andP [? ?] /andP [? ?] /andP [? ?].
     apply/andP; split; first exact/(@IHn _ _ _ t1 t2 t3) => //.
     exact/(@IHn _ _ _ t1' t2' t3').
-  - 
-
+  - rewrite /= ltnS => ? /alpha_BP [St1t2 Ht1t2] /alpha_BP [St2t3 Ht2t3].
+    apply/alpha_BP. exists (St1t2 `|` St2t3) => a aF.
+    apply/IHn; first by rewrite rdepth_perm.
+      exact/Ht1t2/(fresh_fsetU1 aF).
+    exact/Ht2t3/(fresh_fsetU2 aF).
+Qed.
+    
 End AlphaEquivalence.
 
 End FixedSignature.
