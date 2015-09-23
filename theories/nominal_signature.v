@@ -22,10 +22,11 @@ Import Key.Exports.
 
 Section ArityDef.
 
-Context (data_sort : finType).
+Context (data_sort : Type).
 
 Inductive arity  := 
 |atom_arity : arity
+|unit_arity : arity
 |data_arity : data_sort -> arity
 |pair_arity : arity -> arity -> arity
 |binding_arity : arity -> arity.
@@ -42,6 +43,7 @@ Section RtermDef.
 Inductive rterm : arity -> Type :=
 
 |rAtom : forall (a : atom), rterm atom_arity
+|rUnit : rterm unit_arity
 |rC : forall (c : cons), rterm (cons_arity c) -> rterm (data_arity (cons_res c))
 |rPair : forall a1 a2, rterm a1 -> rterm a2 -> rterm (pair_arity a1 a2)
 |rB : forall (ar : arity), atom -> rterm ar -> rterm (binding_arity ar).
@@ -67,6 +69,7 @@ Section NominalRterm.
 Fixpoint rterm_act (ar : arity) (π : {finperm atom}) (t : rterm ar)  : rterm ar :=
   match t with
     |rAtom a => rAtom (π a)
+    |rUnit => rUnit
     |rC c t => rC c (rterm_act π t)
     |rPair _ _ t1 t2 => rPair (rterm_act π t1) (rterm_act π t2)
     |rB _ x t => rB (π x) (rterm_act π t)
@@ -75,6 +78,7 @@ Fixpoint rterm_act (ar : arity) (π : {finperm atom}) (t : rterm ar)  : rterm ar
 Fixpoint rterm_support (ar : arity) (t : rterm ar) :=
   match t with
     |rAtom a => [fset a]
+    |rUnit => fset0
     |rC c t => rterm_support t
     |rPair _ _ t1 t2 => rterm_support t1 `|` rterm_support t2
     |rB _ x t => x |` rterm_support t 
@@ -83,6 +87,7 @@ Fixpoint rterm_support (ar : arity) (t : rterm ar) :=
 Fixpoint rdepth (ar : arity) (t : rterm ar) :=
   match t with
     |rAtom _ => 0
+    |rUnit => 0
     |rC _ t => (rdepth t).+1
     |rPair _ _ t1 t2 => (maxn (rdepth t1) (rdepth t2)).+1
     |rB _ _ t => (rdepth t).+1
@@ -92,14 +97,14 @@ Context (ar : arity).
 
 Lemma rterm_act1 : @rterm_act ar 1 =1 id.
 Proof.
-elim => /= [a|c t ->|ar1 ar2 t1 -> t2 ->|art a t ->] //.
+elim => /= [a||c t ->|ar1 ar2 t1 -> t2 ->|art a t ->] //.
 all: by rewrite finsfun1.
 Qed.
 
 Lemma rterm_actM π π' (t : rterm ar) :
   rterm_act (π * π') t = rterm_act π (rterm_act π' t).
 Proof.
-elim: t => /= [a|c t ->|ar1 ar2 t1 -> t2 ->|art x t ->]//.
+elim: t => /= [a||c t ->|ar1 ar2 t1 -> t2 ->|art x t ->]//.
 all: by rewrite finsfunM.
 Qed. 
 
@@ -113,7 +118,8 @@ Definition rterm_nominal_setoid_mixin :=
 Lemma rterm_act_id (π : {finperm atom}) (t : rterm ar) :
      pfixe π (rterm_support t) -> rterm_act π t = t.
 Proof.
-elim: t => /= [a 
+elim: t => /= [a
+              |
               |c t HFix /HFix -> //
               |a1 a2 t1 HFixt1 t2 HFixt2 /pfixeU [/HFixt1 -> /HFixt2 -> ]
               |art a t HFixt] //=.
@@ -134,6 +140,7 @@ Section AlphaEquivalence.
 Fixpoint alpha_rec (n : nat) (ar1 ar2 : arity) (t1 : rterm ar1) (t2 : rterm ar2) :=
   match n, t1, t2 with
     |_, rAtom x1, rAtom x2 => x1 == x2
+    |_, rUnit, rUnit => true
     |S m, rC c1 u1, rC c2 u2 => (c1 == c2) && (alpha_rec m u1 u2)
     |S m, rPair _ _ u1  v1, rPair _ _ u2 v2 => alpha_rec m u1 u2 && alpha_rec m v1 v2
     |S m, rB _ x1 t1, rB _ x2 t2 =>
@@ -148,7 +155,7 @@ Definition alpha (ar1 ar2 : arity) (t1 : rterm ar1) (t2 : rterm ar2) :=
 Lemma rdepth_perm (π : {finperm atom}) {ar} (t : rterm ar) :
   rdepth (π \dot t) = rdepth t.
 Proof.
-elim: t => [a|c t IHt|art1 art2 t1 IHt1 t2 IHt2|art a t IHt] //=.
+elim: t => [a||c t IHt|art1 art2 t1 IHt1 t2 IHt2|art a t IHt] //=.
 all: by rewrite ?IHt ?IHt1 ?IHt2.
 Qed.
 
@@ -156,8 +163,8 @@ Lemma alpha_recE n (ar1 ar2 : arity) (t1 : rterm ar1) (t2 : rterm ar2) :
   (rdepth t1 <= n) -> alpha_rec n t1 t2 = alpha t1 t2.
 Proof.
 rewrite /alpha; move: {-2}n (leqnn n).
-elim: n ar1 ar2 t1 t2 => [|n IHn] ar1 ar2 [x1|c1 t1|art1 art1' t1 t1'|art1 x1 t1]
-                          [x2|c2 t2|art2 art2' t2 t2'|art2 x2 t2] [|m] //=.
+elim: n ar1 ar2 t1 t2 => [|n IHn] ar1 ar2 [x1||c1 t1|art1 art1' t1 t1'|art1 x1 t1]
+                          [x2||c2 t2|art2 art2' t2 t2'|art2 x2 t2] [|m] //=.
 all: rewrite !ltnS. 
   - by move => /(IHn _ _ t1 t2) H /H ->.
   - rewrite geq_max => mn /andP [t1m t2m].
@@ -173,8 +180,8 @@ Proof.
 rewrite/alpha rdepth_perm.
 move: {-1}(rdepth t1) (leqnn (rdepth t1)) => n.
 elim: n ar1 ar2 t1 t2 π => [|n IHn] ar1 ar2
-                                    [x1|c1 t1|art1 art1' t1 t1'|art1 x1 t1]
-                                    [x2|c2 t2|art2 art2' t2 t2'|art2 x2 t2] π //=;
+                                    [x1||c1 t1|art1 art1' t1 t1'|art1 x1 t1]
+                                    [x2||c2 t2|art2 art2' t2 t2'|art2 x2 t2] π //=;
   do ?by rewrite inj_eq //; apply/finperm_inj.
 all: rewrite ltnS.
   - by move/(IHn _ _ t1 t2 π) ->.
@@ -225,7 +232,7 @@ Qed.
 
 Lemma alpha_refl ar : reflexive (@alpha ar ar).
 Proof.
-elim => [x|c t IHt|ar1 ar2 t1 IHt1 t2 IHt2|ar' x t IH] /=;
+elim => [x||c t IHt|ar1 ar2 t1 IHt1 t2 IHt2|ar' x t IH] /=;
 rewrite ?alphaE //; try exact/andP.
 by rewrite /= alpha_equivariant.
 Qed.
@@ -234,8 +241,8 @@ Lemma alpha_sym ar1 ar2 (t1 : rterm ar1) (t2 : rterm ar2) :
                     alpha t1 t2 = alpha t2 t1.
 Proof.
 move: {-1}(rdepth t1) (leqnn (rdepth t1)) => n.
-elim: n ar1 ar2 t1 t2 => /= [|n IHn] ? ? [x1|c1 t1 |ar1 ar1' t1 t1' |ar1 x1 t1]
-                            [x2|c2 t2|ar2 ar2' t2 t2'|ar2 x2 t2] => //.
+elim: n ar1 ar2 t1 t2 => /= [|n IHn] ? ? [x1||c1 t1 |ar1 ar1' t1 t1' |ar1 x1 t1]
+                            [x2||c2 t2|ar2 ar2' t2 t2'|ar2 x2 t2] => //.
   - by rewrite !alpha_rAtomE eq_sym.
   - by rewrite !alpha_rAtomE eq_sym.
   - by move => ?; rewrite !alpha_rCE eq_sym IHn. 
@@ -252,9 +259,9 @@ Lemma alpha_trans ar1 ar2 ar3 (t2 : rterm ar2) (t1 : rterm ar1) (t3 : rterm ar3)
 Proof.
 move: {-1}(rdepth t1) (leqnn (rdepth t1)) => n.
 elim: n ar1 ar2 ar3 t1 t2 t3 => [|n IHn] ar1 ar2 ar3
-                                         [x2|c2 t2|? ? t2 t2'|? x2 t2]
-                                         [x1|c1 t1|? ? t1 t1'|? x1 t1]
-                                         [x3|c3 t3|? ? t3 t3'|? x3 t3] //.
+                                         [x2||c2 t2|? ? t2 t2'|? x2 t2]
+                                         [x1||c1 t1|? ? t1 t1'|? x1 t1]
+                                         [x3||c3 t3|? ? t3 t3'|? x3 t3] //.
   - rewrite !alpha_rAtomE => _. exact/eq_op_trans.
   - rewrite !alpha_rAtomE => _. exact/eq_op_trans.
   - rewrite /= ltnS => /(IHn _ _ _ t2 t1 t3) Htrans. 
@@ -298,6 +305,11 @@ Definition Atom x := lift_cst (term _) (rAtom x).
 
 Lemma rAtomK x : \pi (rAtom x) = Atom x.
 Proof. by unlock Atom. Qed.
+
+Definition Unit := lift_cst (term _) rUnit.
+
+Lemma rUnitK : \pi (rUnit) = Unit.
+Proof. by unlock Unit. Qed.
 
 Definition C c := lift_op1 (term _) (rC c).
 Arguments C : clear implicits.
@@ -382,6 +394,9 @@ Proof. by rewrite -pi_equivariant !reprK. Qed.
 Lemma Atom_equivariant π x : π \dot (Atom x) = Atom (π x).
 Proof. by rewrite -rAtomK pi_equivariant /= rAtomK. Qed.
 
+Lemma Unit_equivariant π : π \dot (Unit) = Unit.
+Proof. by rewrite -rUnitK pi_equivariant /= rUnitK. Qed.
+
 Lemma C_equivariant π c (t : term (cons_arity c)) :
   π \dot (C c t) = C c (π \dot t).
 Proof.
@@ -462,7 +477,7 @@ by destruct Heq.
 Qed.
 
 
-Lemma CK c t  : exists t', repr (C c t) = rC c t'.
+Lemma CK c t  : exists t', (repr (C c t) = rC c t').
 Proof.
 have: alpha (repr (C c t)) (rC c (repr t)).
   by rewrite alpha_eqE reprK rCK reprK.
@@ -609,8 +624,8 @@ Definition depth ar (t : term ar) := rdepth (repr t).
 Lemma rdepth_alpha (ar1 ar2 : arity) (t1 : rterm ar1) (t2 : rterm ar2) : 
   alpha t1 t2 -> rdepth t1 = rdepth t2.
 Proof.
-  elim: t1 ar2 t2 =>  [x1|c1 t1 IHt1|? ? t1 IHt1 t1' IHt1'|? x1 t1 IHt1] ar2
-                             [x2|c2 t2|? ? t2 t2'|? x2 t2] //=.
+  elim: t1 ar2 t2 =>  [x1||c1 t1 IHt1|? ? t1 IHt1 t1' IHt1'|? x1 t1 IHt1] ar2
+                             [x2||c2 t2|? ? t2 t2'|? x2 t2] //=.
   - by rewrite alphaE => /andP [_ /IHt1] ->. 
   - by rewrite alphaE => /andP [/IHt1 -> /IHt1' ->].
   - rewrite alphaE /=. set z := fresh_in _.
@@ -655,14 +670,16 @@ Section EliminationPrinciples.
 
 Lemma term_naive_ind (P : forall ar, (term ar) -> Prop) :
   (forall x, P _ (Atom x)) ->
+  (P _ Unit) ->
   (forall c t, P _ t -> P _ (C c t)) ->
   (forall ar1 ar2 (t1 : term ar1) (t2 : term ar2), P _ t1 -> P _ t2 -> P _ (Pair t1 t2)) ->
   (forall ar x (t : term ar), P _ t -> P _ (B x t)) ->
   forall ar u, P ar u.
 Proof.
-move => HAtom HC HPair HB ar u; rewrite -[u]reprK.
-elim: (repr u) => [x|c t|? ? t1 IHt1 t2 IHt2|? x t] /=.
+move => HAtom HUnit HC HPair HB ar u; rewrite -[u]reprK.
+elim: (repr u) => [x||c t|? ? t1 IHt1 t2 IHt2|? x t] /=.
   - by rewrite rAtomK.
+  - by rewrite rUnitK.
   - rewrite rCK. exact/HC.
   - rewrite rPairK. exact/HPair.
   - rewrite rBK. exact/HB.
@@ -670,16 +687,18 @@ Qed.
 
 Lemma term_ind {env : {nominalType atom}} (D : env) (P : forall ar, (term ar) -> Prop) :
   (forall x, P _ (Atom x)) ->
+  (P _ Unit) ->
   (forall c t, P _ t -> P _ (C c t)) ->
   (forall ar1 ar2 (t1 : term ar1) (t2 : term ar2), P _ t1 -> P _ t2 -> P _ (Pair t1 t2)) ->
   (forall ar x (t : term ar), x # D -> P _ t -> P _ (B x t)) ->
   forall ar u, P ar u.
 Proof.
-move => HAtom HC HPair HB ar u.
+move => HAtom HUnit HC HPair HB ar u.
 suff : forall (π : {finperm atom}), P ar (π \dot u).
   by move => /(_ 1); rewrite act1.
-elim/term_naive_ind : u => [x|c t IHt|? ? t1 IHt1 t2 IHt2|? x t IHt] π /=.
+elim/term_naive_ind : u => [x||c t IHt|? ? t1 IHt1 t2 IHt2|? x t IHt] π /=.
   - by rewrite Atom_equivariant.
+  - by rewrite Unit_equivariant.
   - rewrite C_equivariant. exact/HC. 
   - rewrite Pair_equivariant. exact/HPair.
   - rewrite B_equivariant.
@@ -746,6 +765,7 @@ elim: n ar t => [|n IHn] ar t //; rewrite /depth.
 move => [?|m]; first by rewrite leqn0 => /eqP ->.
 set t' := (repr t); depelim t'.
   - subst t'. by rewrite /= H /= H.
+  - subst t'. by rewrite /= H /= H.
   - subst t'0. rewrite /= H /= H !ltnS => m_leq_n t'_leq_m. 
     by rewrite IHn // depth_rdepth.
   - subst t'. rewrite /= H /= H !ltnS geq_max => m_leq_n /andP [t'1m t'2m].
@@ -758,18 +778,29 @@ Qed.
 Lemma term_rect_AtomE x : term_rect (Atom x) = f_atom x.
 Proof. by rewrite /term_rect depth_Atom /= AtomK. Qed.
 
-Lemma term_rect_CE c t :
-  term_rect (C c t) = f_C c t (term_rect t).
+Lemma term_rect_CE c t : 
+   term_rect (C c t) = f_C c t (term_rect t). 
+Admitted.
+(* Proof. *)
+(* rewrite/term_rect depth_C /= /=. *)
+(* have [t' ->] := @CK c t. *)
+(* congr f_cons => //. *)
+(* apply/funext => i /=. *)
+(* apply W_rect_recE => /=. *)
+(* exact/leq_bigmax_cond. *)
+(* Qed. *)
+
+Lemma term_rect_PairE ar1 ar2 (t1 : term ar1) (t2 : term ar2) :
+  term_rect (Pair t1 t2) = f_Pair t1 t2 (term_rect t1) (term_rect t2).
 Proof.
-rewrite/term_rect depth_C /= /=.
-have [t'] := @CK c t.
-congr f_cons => //.
-apply/funext => i /=.
-apply W_rect_recE => /=.
-exact/leq_bigmax_cond.
-Qed.
+Admitted.
 
+Lemma term_rect_BE ar x (t : term ar) :
+  term_rect (B x t) = f_B x t (term_rect t).
+Proof.
+Admitted.
 
+End EliminationPrinciples.
 
 End FixedSignature.
 
